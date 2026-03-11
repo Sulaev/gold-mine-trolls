@@ -45,6 +45,7 @@ class AudioService {
   final AudioPlayer _goldenAvalancheCoinPlayer = AudioPlayer();
   final AudioPlayer _treasureTrailLadderClaimPlayer = AudioPlayer();
   final AudioPlayer _cautiousMinerBoomPlayer = AudioPlayer();
+  final AudioPlayer _minersWheelSpinPlayer = AudioPlayer();
 
   StreamSubscription<Duration>? _bgPositionSub;
   StreamSubscription<PlayerState>? _bgStateSub;
@@ -59,6 +60,7 @@ class AudioService {
   bool _clickLoaded = false;
   bool _loseLoaded = false;
   bool _winLoaded = false;
+  bool _minersWheelSpinLoaded = false;
   double _bgVolumeBeforeDuck = 1.0;
 
   Future<void> preloadAssets() async {
@@ -108,10 +110,13 @@ class AudioService {
         await _winPlayer.setAsset(_winAsset);
         _winLoaded = true;
       }
+      if (!_minersWheelSpinLoaded) {
+        await _minersWheelSpinPlayer.setAsset(_wheelSpinAsset);
+        _minersWheelSpinLoaded = true;
+      }
 
       // Warm bundle cache for shared SFX assets that reuse one player instance.
       await rootBundle.load(_rouletteSpinAsset);
-      await rootBundle.load(_wheelSpinAsset);
       await rootBundle.load(_chiefTrollsWheelSpinAsset);
     } catch (_) {}
   }
@@ -203,6 +208,7 @@ class AudioService {
       await _goldenAvalancheCoinPlayer.stop();
       await _treasureTrailLadderClaimPlayer.stop();
       await _cautiousMinerBoomPlayer.stop();
+      await _minersWheelSpinPlayer.stop();
     } catch (_) {}
   }
 
@@ -225,7 +231,7 @@ class AudioService {
   /// Stop wheel spin sound. Call when ball animation ends.
   Future<void> stopWheelSpin() async {
     try {
-      await _sfxPlayer.stop();
+      await _minersWheelSpinPlayer.stop();
     } catch (_) {}
   }
 
@@ -252,16 +258,28 @@ class AudioService {
     } catch (_) {}
   }
 
+  /// Ensure miners wheel spin asset is loaded. Call when opening the game screen.
+  Future<void> ensureMinersWheelSpinLoaded() async {
+    if (_minersWheelSpinLoaded) return;
+    try {
+      await rootBundle.load(_wheelSpinAsset);
+      await _minersWheelSpinPlayer.setAsset(_wheelSpinAsset);
+      _minersWheelSpinLoaded = true;
+    } catch (_) {}
+  }
+
   /// Play wheel spin (gumball_machine) and fade out over [durationMs].
   /// Call when miners wheel spin starts.
   Future<void> playWheelSpin(int durationMs) async {
     if (!SettingsService.soundEnabled) return;
     try {
-      await _sfxPlayer.stop();
-      await _sfxPlayer.setAsset(_wheelSpinAsset);
-      await _sfxPlayer.setVolume(1.0);
-      await _sfxPlayer.seek(Duration.zero);
-      await _sfxPlayer.play();
+      if (!_minersWheelSpinLoaded) {
+        await ensureMinersWheelSpinLoaded();
+      }
+      await _minersWheelSpinPlayer.stop();
+      await _minersWheelSpinPlayer.setVolume(1.0);
+      await _minersWheelSpinPlayer.seek(Duration.zero);
+      await _minersWheelSpinPlayer.play();
 
       final steps = 20;
       final stepMs = durationMs ~/ steps;
@@ -269,9 +287,9 @@ class AudioService {
         await Future<void>.delayed(Duration(milliseconds: stepMs));
         final t = i / steps;
         final vol = (1.0 - t).clamp(0.0, 1.0);
-        await _sfxPlayer.setVolume(vol);
+        await _minersWheelSpinPlayer.setVolume(vol);
       }
-      await _sfxPlayer.stop();
+      await _minersWheelSpinPlayer.stop();
       unawaited(_ensureBgSpeedCorrect());
     } catch (_) {}
   }
@@ -448,5 +466,6 @@ class AudioService {
     await _goldenAvalancheCoinPlayer.dispose();
     await _treasureTrailLadderClaimPlayer.dispose();
     await _cautiousMinerBoomPlayer.dispose();
+    await _minersWheelSpinPlayer.dispose();
   }
 }

@@ -17,14 +17,14 @@ class MinersPassScreen extends StatefulWidget {
 }
 
 class _MinersPassScreenState extends State<MinersPassScreen> {
-  static const _topPadding = 24.0;
-  static const _headerTop = 47.0 + _topPadding;
+  static const _topPadding = 16.0;
+  static const _headerTop = 40.0 + _topPadding;
   static const _closeBtnSize = 38.0;
   static const _closeBtnLeftMargin = 16.0;
-  static const _titleWidth = 320.0;
-  static const _titleHeight = 111.0;
+  static const _titleWidth = 300.0;
+  static const _titleHeight = 90.0;
   static const _bannerWidth = 264.0;
-  static const _bannerHeight = 65.0;
+  static const _bannerHeight = 54.0;
 
   @override
   void initState() {
@@ -50,9 +50,9 @@ class _MinersPassScreenState extends State<MinersPassScreen> {
     return const TextStyle(
       fontFamily: 'Gilroy',
       fontWeight: FontWeight.w900,
-      fontSize: 16.82,
-      height: 1.6,
-      letterSpacing: -0.02 * 16.82,
+      fontSize: 13.5,
+      height: 1.35,
+      letterSpacing: -0.02 * 13.5,
       color: Colors.white,
     ).copyWith(
       color: foreground == null ? color : null,
@@ -64,9 +64,9 @@ class _MinersPassScreenState extends State<MinersPassScreen> {
     return const TextStyle(
       fontFamily: 'Gilroy',
       fontWeight: FontWeight.w900,
-      fontSize: 22.36,
-      height: 1.6,
-      letterSpacing: -0.02 * 22.36,
+      fontSize: 16.5,
+      height: 1.35,
+      letterSpacing: -0.02 * 16.5,
       color: Colors.white,
     ).copyWith(
       color: foreground == null ? color : null,
@@ -122,7 +122,7 @@ class _MinersPassScreenState extends State<MinersPassScreen> {
       onTap: () => _onPlanTap(itemId),
       child: SizedBox(
         width: width,
-        height: 70,
+        height: 58,
         child: Stack(
           fit: StackFit.expand,
           alignment: Alignment.center,
@@ -132,13 +132,14 @@ class _MinersPassScreenState extends State<MinersPassScreen> {
               fit: BoxFit.fill,
             ),
             Padding(
-              padding: const EdgeInsets.only(top: 3),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   _outlinedText(topText, styleBuilder: _topTextStyle),
                   Transform.translate(
-                    offset: const Offset(0, -4),
+                    offset: const Offset(0, -2),
                     child: _outlinedText(
                       bottomText,
                       styleBuilder: _bottomTextStyle,
@@ -157,8 +158,8 @@ class _MinersPassScreenState extends State<MinersPassScreen> {
     const baseStyle = TextStyle(
       fontFamily: 'Gothic A1',
       fontWeight: FontWeight.w400,
-      fontSize: 12,
-      height: 1.6,
+      fontSize: 10.5,
+      height: 1.4,
       color: Color(0xFFFFFFFF),
     );
     const underline = TextDecoration.underline;
@@ -194,9 +195,9 @@ class _MinersPassScreenState extends State<MinersPassScreen> {
       style: const TextStyle(
         fontFamily: 'Gotham',
         fontWeight: FontWeight.w900,
-        fontSize: 17.49,
-        height: 1.6,
-        letterSpacing: -0.02 * 17.49,
+        fontSize: 14,
+        height: 1.4,
+        letterSpacing: -0.02 * 14,
         decoration: TextDecoration.underline,
         color: Colors.white,
       ),
@@ -217,7 +218,7 @@ class _MinersPassScreenState extends State<MinersPassScreen> {
           ),
           SafeArea(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(24, 44, 24, 16),
+              padding: const EdgeInsets.fromLTRB(20, 36, 20, 12),
               child: Column(
                 children: [
                   SizedBox(
@@ -230,11 +231,11 @@ class _MinersPassScreenState extends State<MinersPassScreen> {
                   ),
                   const SizedBox(height: 2),
                   _buildOfferTitle('assets/images/paywall/ex_title1.png'),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 2),
                   _buildOfferTitle('assets/images/paywall/ex_title2.png'),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 2),
                   _buildOfferTitle('assets/images/paywall/ex_title3.png'),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 6),
                   _buildBuyButton(
                     assetPath: 'assets/images/paywall/buy_btn_green.png',
                     width: 200,
@@ -242,7 +243,7 @@ class _MinersPassScreenState extends State<MinersPassScreen> {
                     bottomText: '+ 100,000 COINS',
                     itemId: 'miners_pass_1_month',
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 5),
                   _buildBuyButton(
                     assetPath: 'assets/images/paywall/buy_btn_green.png',
                     width: 200,
@@ -250,7 +251,7 @@ class _MinersPassScreenState extends State<MinersPassScreen> {
                     bottomText: '+ 350,000 COINS',
                     itemId: 'miners_pass_3_month',
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 5),
                   _buildBuyButton(
                     assetPath: 'assets/images/paywall/buy_btn_green.png',
                     width: 200,
@@ -258,7 +259,7 @@ class _MinersPassScreenState extends State<MinersPassScreen> {
                     bottomText: '+ 650,000 COINS',
                     itemId: 'miners_pass_6_month',
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 6),
                   _buildBuyButton(
                     assetPath: 'assets/images/paywall/buy_btn_yelow.png',
                     width: 237,
@@ -266,9 +267,9 @@ class _MinersPassScreenState extends State<MinersPassScreen> {
                     bottomText: '+ 1,500,000 COINS',
                     itemId: 'miners_pass_12_month',
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 6),
                   _buildFooterCopy(),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 6),
                   _buildRestorePurchases(),
                 ],
               ),

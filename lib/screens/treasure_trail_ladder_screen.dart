@@ -72,6 +72,9 @@ class _TreasureTrailLadderScreenState extends State<TreasureTrailLadderScreen>
   );
   final Set<int> _revealed = <int>{};
   final Set<int> _selected = <int>{};
+  Timer? _adjustTimer;
+  Stopwatch? _adjustWatch;
+  int _activeDelta = 0;
 
   @override
   void initState() {
@@ -124,6 +127,8 @@ class _TreasureTrailLadderScreenState extends State<TreasureTrailLadderScreen>
 
   @override
   void dispose() {
+    _adjustTimer?.cancel();
+    _adjustWatch?.stop();
     BalanceService.balanceNotifier.removeListener(_onBalanceNotifierChanged);
     _balanceCountController.dispose();
     _notificationController.dispose();
@@ -318,14 +323,36 @@ class _TreasureTrailLadderScreenState extends State<TreasureTrailLadderScreen>
 
   int _cellKey(int row, int col) => row * 100 + col;
 
-  Future<void> _applyBetDelta(int delta) async {
+  void _applyBetDelta(int delta, {bool haptic = true}) {
     if (_loadingBalance || _balance <= 0 || _inRun) return;
     final next = (_bet + delta).clamp(_minBet, _balance);
     if (next == _bet) return;
     setState(() => _bet = next);
-    await BalanceService.setLastBet(_bet);
+    unawaited(BalanceService.setLastBet(_bet));
     unawaited(AnalyticsService.reportBetChange(_gameName, _bet));
-    HapticFeedback.selectionClick();
+    if (haptic) HapticFeedback.selectionClick();
+  }
+
+  static const _holdSteps = [50, 100, 500, 1000, 10000, 100000];
+  static const _holdStepIntervalMs = 800;
+
+  void _startContinuousBetAdjust(int delta) {
+    _adjustTimer?.cancel();
+    _activeDelta = delta;
+    _adjustWatch = Stopwatch()..start();
+    _adjustTimer = Timer.periodic(const Duration(milliseconds: 120), (_) {
+      final elapsed = _adjustWatch?.elapsedMilliseconds ?? 0;
+      final level = (elapsed / _holdStepIntervalMs).floor().clamp(0, _holdSteps.length - 1);
+      final step = _holdSteps[level];
+      _applyBetDelta(_activeDelta * step, haptic: false);
+    });
+  }
+
+  void _stopContinuousBetAdjust() {
+    _adjustTimer?.cancel();
+    _adjustTimer = null;
+    _adjustWatch?.stop();
+    _adjustWatch = null;
   }
 
   Future<void> _setQuickBet(int nextBet) async {
@@ -908,6 +935,9 @@ class _TreasureTrailLadderScreenState extends State<TreasureTrailLadderScreen>
                   left: -12 * scale,
                   child: PressableButton(
                     onTap: () => _applyBetDelta(-_betStep),
+                    onLongPressStart: (_) => _startContinuousBetAdjust(-1),
+                    onLongPressEnd: (_) => _stopContinuousBetAdjust(),
+                    onLongPressCancel: _stopContinuousBetAdjust,
                     child: SizedBox(
                       width: 29 * scale,
                       height: 52 * scale,
@@ -922,6 +952,9 @@ class _TreasureTrailLadderScreenState extends State<TreasureTrailLadderScreen>
                   right: -12 * scale,
                   child: PressableButton(
                     onTap: () => _applyBetDelta(_betStep),
+                    onLongPressStart: (_) => _startContinuousBetAdjust(1),
+                    onLongPressEnd: (_) => _stopContinuousBetAdjust(),
+                    onLongPressCancel: _stopContinuousBetAdjust,
                     child: SizedBox(
                       width: 29 * scale,
                       height: 52 * scale,
@@ -1055,12 +1088,14 @@ class _TreasureTrailLadderScreenState extends State<TreasureTrailLadderScreen>
                 child: Stack(
                   children: [
                     if (!_isGameOver)
-                      Positioned.fill(
-                        child: Align(
-                          alignment: Alignment.topCenter,
-                          child: Transform.translate(
-                            // Let grid pass under top HUD elements.
-                            offset: Offset(0, 178 * scale),
+                      Positioned(
+                        top: 198 * scale,
+                        left: 0,
+                        right: 0,
+                        bottom: 248 * scale,
+                        child: Center(
+                          child: FittedBox(
+                            fit: BoxFit.contain,
                             child: _buildGrid(scale),
                           ),
                         ),

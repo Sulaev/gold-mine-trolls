@@ -51,6 +51,9 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
   bool _showLoseLight = false;
   double _loseLightOpacity = 0;
   static const _loseLightFadeDuration = Duration(milliseconds: 2200);
+  Timer? _adjustTimer;
+  Stopwatch? _adjustWatch;
+  int _activeDelta = 0;
 
   @override
   void initState() {
@@ -101,6 +104,8 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
 
   @override
   void dispose() {
+    _adjustTimer?.cancel();
+    _adjustWatch?.stop();
     BalanceService.balanceNotifier.removeListener(_onBalanceNotifierChanged);
     _breathController.dispose();
     _shakeController.dispose();
@@ -217,7 +222,7 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
     );
   }
 
-  Future<void> _applyBetDelta(int delta) async {
+  void _applyBetDelta(int delta, {bool haptic = true}) {
     if (_loadingBalance ||
         _balance <= 0 ||
         _inRun ||
@@ -229,9 +234,31 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
     final next = (_bet + delta).clamp(_minBet, _balance);
     if (next == _bet) return;
     setState(() => _bet = next);
-    await BalanceService.setLastBet(_bet);
+    unawaited(BalanceService.setLastBet(_bet));
     unawaited(AnalyticsService.reportBetChange(_gameName, _bet));
-    HapticFeedback.selectionClick();
+    if (haptic) HapticFeedback.selectionClick();
+  }
+
+  static const _holdSteps = [50, 100, 500, 1000, 10000, 100000];
+  static const _holdStepIntervalMs = 800;
+
+  void _startContinuousBetAdjust(int delta) {
+    _adjustTimer?.cancel();
+    _activeDelta = delta;
+    _adjustWatch = Stopwatch()..start();
+    _adjustTimer = Timer.periodic(const Duration(milliseconds: 120), (_) {
+      final elapsed = _adjustWatch?.elapsedMilliseconds ?? 0;
+      final level = (elapsed / _holdStepIntervalMs).floor().clamp(0, _holdSteps.length - 1);
+      final step = _holdSteps[level];
+      _applyBetDelta(_activeDelta * step, haptic: false);
+    });
+  }
+
+  void _stopContinuousBetAdjust() {
+    _adjustTimer?.cancel();
+    _adjustTimer = null;
+    _adjustWatch?.stop();
+    _adjustWatch = null;
   }
 
   Future<void> _startOrGoDeeper() async {
@@ -668,6 +695,9 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
               children: [
                 PressableButton(
                   onTap: () => _applyBetDelta(-_betStep),
+                  onLongPressStart: (_) => _startContinuousBetAdjust(-1),
+                  onLongPressEnd: (_) => _stopContinuousBetAdjust(),
+                  onLongPressCancel: _stopContinuousBetAdjust,
                   child: SizedBox(
                     width: 29 * scale,
                     height: 52 * scale,
@@ -699,6 +729,9 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
                 SizedBox(width: 12 * scale),
                 PressableButton(
                   onTap: () => _applyBetDelta(_betStep),
+                  onLongPressStart: (_) => _startContinuousBetAdjust(1),
+                  onLongPressEnd: (_) => _stopContinuousBetAdjust(),
+                  onLongPressCancel: _stopContinuousBetAdjust,
                   child: SizedBox(
                     width: 29 * scale,
                     height: 52 * scale,

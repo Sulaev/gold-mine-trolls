@@ -638,17 +638,20 @@ class _GoldVeinScreenState extends State<GoldVeinScreen>
   }
 
   void _applyBetDelta(int delta, {bool haptic = true}) {
+    if (_tutorialStateLoaded && _tutorialStep == 2 && delta > 0) {
+      unawaited(_completeTutorialStepTwo());
+    }
     if (_loadingBalance || _balance <= 0) return;
     final next = (_bet + delta).clamp(_minBet, _balance);
     if (next == _bet) return;
     setState(() => _bet = next);
     unawaited(BalanceService.setLastBet(_bet));
     unawaited(AnalyticsService.reportBetChange(_gameName, _bet));
-    if (_tutorialStateLoaded && _tutorialStep == 2) {
-      unawaited(_completeTutorialStepTwo());
-    }
     if (haptic) HapticFeedback.selectionClick();
   }
+
+  static const _holdSteps = [50, 100, 500, 1000, 10000, 100000];
+  static const _holdStepIntervalMs = 800;
 
   void _startContinuousBetAdjust(int delta) {
     _stopContinuousBetAdjust();
@@ -656,10 +659,9 @@ class _GoldVeinScreenState extends State<GoldVeinScreen>
     _adjustWatch = Stopwatch()..start();
     _adjustTimer = Timer.periodic(const Duration(milliseconds: 120), (_) {
       final elapsed = _adjustWatch?.elapsedMilliseconds ?? 0;
-      var factor = 1;
-      if (elapsed >= 3000 && elapsed < 5000) factor = 4;
-      if (elapsed >= 5000) factor = 8;
-      _applyBetDelta(_activeDelta * _betStep * factor, haptic: false);
+      final level = (elapsed / _holdStepIntervalMs).floor().clamp(0, _holdSteps.length - 1);
+      final step = _holdSteps[level];
+      _applyBetDelta(_activeDelta * step, haptic: false);
     });
   }
 
@@ -671,14 +673,14 @@ class _GoldVeinScreenState extends State<GoldVeinScreen>
   }
 
   void _setMaxBet() {
+    if (_tutorialStateLoaded && _tutorialStep == 2) {
+      unawaited(_completeTutorialStepTwo());
+    }
     if (_balance <= 0) return;
     if (_bet == _balance) return;
     setState(() => _bet = _balance);
     unawaited(BalanceService.setLastBet(_bet));
     unawaited(AnalyticsService.reportBetChange(_gameName, _bet));
-    if (_tutorialStateLoaded && _tutorialStep == 2) {
-      unawaited(_completeTutorialStepTwo());
-    }
     HapticFeedback.lightImpact();
   }
 

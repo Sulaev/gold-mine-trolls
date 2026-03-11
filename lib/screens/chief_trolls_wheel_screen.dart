@@ -41,6 +41,9 @@ class _ChiefTrollsWheelScreenState extends State<ChiefTrollsWheelScreen>
   late final AnimationController _winCountController;
   late final AnimationController _balanceCountController;
   late final math.Random _rng;
+  Timer? _adjustTimer;
+  Stopwatch? _adjustWatch;
+  int _activeDelta = 0;
   bool _isWinOverlayVisible = false;
   int _overlayTargetWin = 0;
   int _overlayAnimatedWin = 0;
@@ -61,7 +64,6 @@ class _ChiefTrollsWheelScreenState extends State<ChiefTrollsWheelScreen>
     0,
   ];
   static const _firstZoneCenterDeg = 0.0;
-  static const _zeroVisualNudgeDeg = -8.0;
 
   @override
   void initState() {
@@ -118,6 +120,8 @@ class _ChiefTrollsWheelScreenState extends State<ChiefTrollsWheelScreen>
 
   @override
   void dispose() {
+    _adjustTimer?.cancel();
+    _adjustWatch?.stop();
     BalanceService.balanceNotifier.removeListener(_onBalanceNotifierChanged);
     _spinController.dispose();
     _notificationController.dispose();
@@ -282,14 +286,36 @@ class _ChiefTrollsWheelScreenState extends State<ChiefTrollsWheelScreen>
     );
   }
 
-  Future<void> _applyBetDelta(int delta) async {
+  void _applyBetDelta(int delta, {bool haptic = true}) {
     if (_loadingBalance || _balance <= 0) return;
     final next = (_bet + delta).clamp(_minBet, _balance);
     if (next == _bet) return;
     setState(() => _bet = next);
-    await BalanceService.setLastBet(_bet);
+    unawaited(BalanceService.setLastBet(_bet));
     unawaited(AnalyticsService.reportBetChange(_gameName, _bet));
-    HapticFeedback.selectionClick();
+    if (haptic) HapticFeedback.selectionClick();
+  }
+
+  static const _holdSteps = [50, 100, 500, 1000, 10000, 100000];
+  static const _holdStepIntervalMs = 800;
+
+  void _startContinuousBetAdjust(int delta) {
+    _adjustTimer?.cancel();
+    _activeDelta = delta;
+    _adjustWatch = Stopwatch()..start();
+    _adjustTimer = Timer.periodic(const Duration(milliseconds: 120), (_) {
+      final elapsed = _adjustWatch?.elapsedMilliseconds ?? 0;
+      final level = (elapsed / _holdStepIntervalMs).floor().clamp(0, _holdSteps.length - 1);
+      final step = _holdSteps[level];
+      _applyBetDelta(_activeDelta * step, haptic: false);
+    });
+  }
+
+  void _stopContinuousBetAdjust() {
+    _adjustTimer?.cancel();
+    _adjustTimer = null;
+    _adjustWatch?.stop();
+    _adjustWatch = null;
   }
 
   double _normalizeAngle(double angle) {
@@ -339,10 +365,7 @@ class _ChiefTrollsWheelScreenState extends State<ChiefTrollsWheelScreen>
 
     final targetMultiplier = _pickWeightedMultiplier();
     final targetIndex = _pickIndexForMultiplier(targetMultiplier);
-    var desiredAngle = -_zoneCenterAngle(targetIndex);
-    if (targetMultiplier == 0) {
-      desiredAngle += _zeroVisualNudgeDeg * math.pi / 180;
-    }
+    final desiredAngle = -_zoneCenterAngle(targetIndex);
     final currentNorm = _normalizeAngle(_wheelAngle);
     final desiredNorm = _normalizeAngle(desiredAngle);
     final delta = _normalizeAngle(desiredNorm - currentNorm);
@@ -373,9 +396,10 @@ class _ChiefTrollsWheelScreenState extends State<ChiefTrollsWheelScreen>
     final landedMultiplier = _zoneMultipliers[targetIndex];
     final winAmount = (_bet * landedMultiplier).round();
     final settledBalance = afterBet + winAmount;
+    final exactAngle = _normalizeAngle(desiredAngle);
     setState(() {
       _isSpinning = false;
-      _wheelAngle = end;
+      _wheelAngle = exactAngle;
       _lastWinAmount = winAmount;
       _balance = settledBalance;
     });
@@ -673,6 +697,9 @@ class _ChiefTrollsWheelScreenState extends State<ChiefTrollsWheelScreen>
                   left: -12 * scale,
                   child: PressableButton(
                     onTap: () => _applyBetDelta(-_betStep),
+                    onLongPressStart: (_) => _startContinuousBetAdjust(-1),
+                    onLongPressEnd: (_) => _stopContinuousBetAdjust(),
+                    onLongPressCancel: _stopContinuousBetAdjust,
                     child: SizedBox(
                       width: 29 * scale,
                       height: 52 * scale,
@@ -687,6 +714,9 @@ class _ChiefTrollsWheelScreenState extends State<ChiefTrollsWheelScreen>
                   right: -12 * scale,
                   child: PressableButton(
                     onTap: () => _applyBetDelta(_betStep),
+                    onLongPressStart: (_) => _startContinuousBetAdjust(1),
+                    onLongPressEnd: (_) => _stopContinuousBetAdjust(),
+                    onLongPressCancel: _stopContinuousBetAdjust,
                     child: SizedBox(
                       width: 29 * scale,
                       height: 52 * scale,

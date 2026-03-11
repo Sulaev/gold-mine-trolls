@@ -38,6 +38,9 @@ class _CautiousMinerScreenState extends State<CautiousMinerScreen>
   late final AnimationController _notificationController;
   late final AnimationController _winCountController;
   Timer? _winOverlayAutoHideTimer;
+  Timer? _adjustTimer;
+  Stopwatch? _adjustWatch;
+  int _activeDelta = 0;
 
   int _balance = 0;
   int _displayBalance = 0;
@@ -106,6 +109,8 @@ class _CautiousMinerScreenState extends State<CautiousMinerScreen>
 
   @override
   void dispose() {
+    _adjustTimer?.cancel();
+    _adjustWatch?.stop();
     BalanceService.balanceNotifier.removeListener(_onBalanceNotifierChanged);
     _winOverlayAutoHideTimer?.cancel();
     _balanceCountController.dispose();
@@ -231,14 +236,36 @@ class _CautiousMinerScreenState extends State<CautiousMinerScreen>
 
   int _cellKey(int row, int col) => row * 100 + col;
 
-  Future<void> _applyBetDelta(int delta) async {
+  void _applyBetDelta(int delta, {bool haptic = true}) {
     if (_loadingBalance || _balance <= 0 || _inRun || _isGameOver) return;
     final next = (_bet + delta).clamp(_minBet, _balance);
     if (next == _bet) return;
     setState(() => _bet = next);
-    await BalanceService.setLastBet(_bet);
+    unawaited(BalanceService.setLastBet(_bet));
     unawaited(AnalyticsService.reportBetChange(_gameName, _bet));
-    HapticFeedback.selectionClick();
+    if (haptic) HapticFeedback.selectionClick();
+  }
+
+  static const _holdSteps = [50, 100, 500, 1000, 10000, 100000];
+  static const _holdStepIntervalMs = 800;
+
+  void _startContinuousBetAdjust(int delta) {
+    _adjustTimer?.cancel();
+    _activeDelta = delta;
+    _adjustWatch = Stopwatch()..start();
+    _adjustTimer = Timer.periodic(const Duration(milliseconds: 120), (_) {
+      final elapsed = _adjustWatch?.elapsedMilliseconds ?? 0;
+      final level = (elapsed / _holdStepIntervalMs).floor().clamp(0, _holdSteps.length - 1);
+      final step = _holdSteps[level];
+      _applyBetDelta(_activeDelta * step, haptic: false);
+    });
+  }
+
+  void _stopContinuousBetAdjust() {
+    _adjustTimer?.cancel();
+    _adjustTimer = null;
+    _adjustWatch?.stop();
+    _adjustWatch = null;
   }
 
   Future<void> _startRun() async {
@@ -644,6 +671,9 @@ class _CautiousMinerScreenState extends State<CautiousMinerScreen>
                   left: -12 * scale,
                   child: PressableButton(
                     onTap: () => _applyBetDelta(-_betStep),
+                    onLongPressStart: (_) => _startContinuousBetAdjust(-1),
+                    onLongPressEnd: (_) => _stopContinuousBetAdjust(),
+                    onLongPressCancel: _stopContinuousBetAdjust,
                     child: SizedBox(
                       width: 29 * scale,
                       height: 52 * scale,
@@ -658,6 +688,9 @@ class _CautiousMinerScreenState extends State<CautiousMinerScreen>
                   right: -12 * scale,
                   child: PressableButton(
                     onTap: () => _applyBetDelta(_betStep),
+                    onLongPressStart: (_) => _startContinuousBetAdjust(1),
+                    onLongPressEnd: (_) => _stopContinuousBetAdjust(),
+                    onLongPressCancel: _stopContinuousBetAdjust,
                     child: SizedBox(
                       width: 29 * scale,
                       height: 52 * scale,
@@ -756,7 +789,9 @@ class _CautiousMinerScreenState extends State<CautiousMinerScreen>
                     ),
                     if (!_isGameOver)
                       Padding(
-                        padding: EdgeInsets.only(bottom: 12 * scale),
+                        padding: EdgeInsets.only(
+                          bottom: (12 * scale - 2).clamp(4.0, 20.0),
+                        ),
                         child: _buildBottomControls(scale),
                       ),
                   ],
