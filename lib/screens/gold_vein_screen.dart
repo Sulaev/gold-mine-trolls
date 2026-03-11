@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:gold_mine_trolls/screens/shop_screen.dart';
+import 'package:gold_mine_trolls/services/analytics_service.dart';
 import 'package:gold_mine_trolls/services/audio_service.dart';
 import 'package:gold_mine_trolls/services/balance_service.dart';
 import 'package:gold_mine_trolls/screens/info_screen.dart';
@@ -25,6 +26,7 @@ class GoldVeinScreen extends StatefulWidget {
 
 class _GoldVeinScreenState extends State<GoldVeinScreen>
     with TickerProviderStateMixin {
+  static const _gameName = 'gold_vein';
   static const _rows = 5;
   static const _cols = 3;
   static const _betStep = 50;
@@ -157,6 +159,7 @@ class _GoldVeinScreenState extends State<GoldVeinScreen>
   @override
   void initState() {
     super.initState();
+    unawaited(AnalyticsService.reportGameStart(_gameName));
     _winPulseController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 900),
@@ -326,7 +329,7 @@ class _GoldVeinScreenState extends State<GoldVeinScreen>
       barrierColor: const Color(0x80000000),
       transitionDuration: const Duration(milliseconds: 200),
       pageBuilder: (context, animation, secondaryAnimation) =>
-          const ShopScreen(),
+          const ShopScreen(source: 'gold_vein'),
     );
   }
 
@@ -479,6 +482,7 @@ class _GoldVeinScreenState extends State<GoldVeinScreen>
     });
 
     if (win > 0) {
+      unawaited(AnalyticsService.reportGameWin(_gameName));
       unawaited(AudioService.instance.playWin());
       _winPulseController.repeat(reverse: true);
       _balance += win;
@@ -492,6 +496,7 @@ class _GoldVeinScreenState extends State<GoldVeinScreen>
             : (isBigWin ? _WinBannerType.bigWin : _WinBannerType.win),
       );
     } else {
+      unawaited(AnalyticsService.reportGameLoss(_gameName));
       _winPulseController.stop();
       _winPulseController.value = 0;
       _notificationHideTimer?.cancel();
@@ -638,6 +643,7 @@ class _GoldVeinScreenState extends State<GoldVeinScreen>
     if (next == _bet) return;
     setState(() => _bet = next);
     unawaited(BalanceService.setLastBet(_bet));
+    unawaited(AnalyticsService.reportBetChange(_gameName, _bet));
     if (_tutorialStateLoaded && _tutorialStep == 2) {
       unawaited(_completeTutorialStepTwo());
     }
@@ -669,6 +675,7 @@ class _GoldVeinScreenState extends State<GoldVeinScreen>
     if (_bet == _balance) return;
     setState(() => _bet = _balance);
     unawaited(BalanceService.setLastBet(_bet));
+    unawaited(AnalyticsService.reportBetChange(_gameName, _bet));
     if (_tutorialStateLoaded && _tutorialStep == 2) {
       unawaited(_completeTutorialStepTwo());
     }

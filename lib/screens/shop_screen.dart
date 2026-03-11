@@ -1,13 +1,27 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:gold_mine_trolls/screens/miners_pass_screen.dart';
+import 'package:gold_mine_trolls/services/analytics_service.dart';
 import 'package:gold_mine_trolls/services/balance_service.dart';
 import 'package:gold_mine_trolls/widgets/shop_element_card.dart';
 import 'package:gold_mine_trolls/widgets/pressable_button.dart';
 import 'package:gold_mine_trolls/widgets/tap_banner.dart';
 
 /// Shop modal — appears over the main screen with darkened background
-class ShopScreen extends StatelessWidget {
-  const ShopScreen({super.key});
+class ShopScreen extends StatefulWidget {
+  const ShopScreen({
+    super.key,
+    required this.source,
+  });
+
+  final String source;
+
+  @override
+  State<ShopScreen> createState() => _ShopScreenState();
+}
+
+class _ShopScreenState extends State<ShopScreen> {
+  bool _purchaseMade = false;
 
   static const _topPadding = 24.0;
   static const _shopTitleTop = 47.0 + _topPadding;
@@ -20,6 +34,28 @@ class ShopScreen extends StatelessWidget {
   static const _bannerGap = -120.0;
   static const _bannerWidth = 311.0;
   static const _bannerHeight = 160.0;
+
+  static const _coinOffers = [
+    ('coins_100000', 100000, 0.0),
+    ('coins_250000', 250000, 0.0),
+    ('coins_500000', 500000, 0.0),
+    ('coins_1000000', 1000000, 0.0),
+    ('coins_3000000', 3000000, 0.0),
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    AnalyticsService.reportPaywallView(widget.source);
+  }
+
+  @override
+  void dispose() {
+    if (!_purchaseMade) {
+      AnalyticsService.reportPaywallClose(widget.source);
+    }
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -90,18 +126,36 @@ class ShopScreen extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       ...List.generate(
-                        5,
+                        _coinOffers.length,
                         (i) => Transform.translate(
                           offset: Offset(0, i > 0 ? _elementGap * i : 0),
                           child: ShopElementCard(
-                            coins: [100000, 250000, 500000, 1000000, 3000000][i],
+                            coins: _coinOffers[i].$2,
                             contentTopOffset: i == 4 ? 10 : 0,
                             showOnlyForYouBanner: i == 4,
                             onBuyTap: () async {
                               HapticFeedback.lightImpact();
-                              await BalanceService.addBalance(
-                                [100000, 250000, 500000, 1000000, 3000000][i],
+                              final itemId = _coinOffers[i].$1;
+                              final amount = _coinOffers[i].$2;
+                              final price = _coinOffers[i].$3;
+                              await AnalyticsService.reportPurchaseClick(
+                                itemId: itemId,
+                                type: 'coin',
                               );
+                              try {
+                                await BalanceService.addBalance(amount);
+                                _purchaseMade = true;
+                                await AnalyticsService.reportPurchaseSuccess(
+                                  itemId: itemId,
+                                  price: price,
+                                  type: 'coin',
+                                );
+                              } catch (_) {
+                                await AnalyticsService.reportPurchaseError(
+                                  itemId: itemId,
+                                  type: 'coin',
+                                );
+                              }
                             },
                           ),
                         ),
@@ -116,7 +170,12 @@ class ShopScreen extends StatelessWidget {
                             width: _bannerWidth,
                             height: _bannerHeight,
                             onTap: () {
-                              // TODO: navigate to Miner's Pass
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                      const MinersPassScreen(source: 'shop'),
+                                ),
+                              );
                             },
                           ),
                         ),

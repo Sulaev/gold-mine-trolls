@@ -37,6 +37,7 @@ dependencies:
   flutter_svg: ^2.0.16
   audio_session: ^0.1.25
   just_audio: ^0.9.40
+  appmetrica_plugin: ^3.4.0
 
 dev_dependencies:
   flutter_test:

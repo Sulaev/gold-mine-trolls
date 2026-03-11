@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:math' as math;
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -8,6 +7,7 @@ import 'package:gold_mine_trolls/models/blackjack_card.dart';
 import 'package:gold_mine_trolls/models/blackjack_game.dart';
 import 'package:gold_mine_trolls/screens/info_screen.dart';
 import 'package:gold_mine_trolls/screens/shop_screen.dart';
+import 'package:gold_mine_trolls/services/analytics_service.dart';
 import 'package:gold_mine_trolls/services/audio_service.dart';
 import 'package:gold_mine_trolls/services/balance_service.dart';
 import 'package:gold_mine_trolls/services/card_mine_21_storage.dart';
@@ -23,6 +23,7 @@ class CardMine21Screen extends StatefulWidget {
 
 class _CardMine21ScreenState extends State<CardMine21Screen>
     with TickerProviderStateMixin {
+  static const _gameName = 'card_mine_21';
   static const _balanceStroke = Color(0x40000000);
   static const _balanceFill = Color(0xFFFFFFFF);
   static const _cardWidth = 99.0;
@@ -54,6 +55,7 @@ class _CardMine21ScreenState extends State<CardMine21Screen>
   @override
   void initState() {
     super.initState();
+    unawaited(AnalyticsService.reportGameStart(_gameName));
     _balanceCountController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 520),
@@ -177,7 +179,7 @@ class _CardMine21ScreenState extends State<CardMine21Screen>
       barrierColor: const Color(0x80000000),
       transitionDuration: const Duration(milliseconds: 200),
       pageBuilder: (context, animation, secondaryAnimation) =>
-          const ShopScreen(),
+          const ShopScreen(source: 'card_mine_21'),
     );
   }
 
@@ -292,23 +294,6 @@ class _CardMine21ScreenState extends State<CardMine21Screen>
     unawaited(_saveGameState());
   }
 
-  String get _gameResultText {
-    switch (_game.phase) {
-      case BlackjackPhase.playerWin:
-        return 'You Win!';
-      case BlackjackPhase.playerBust:
-        return 'Bust! You lose';
-      case BlackjackPhase.dealerWin:
-        return 'Dealer Wins';
-      case BlackjackPhase.dealerBust:
-        return 'Dealer Bust! You Win!';
-      case BlackjackPhase.push:
-        return 'Push';
-      default:
-        return '';
-    }
-  }
-
   bool get _isLoseState =>
       _game.phase == BlackjackPhase.dealerWin ||
       _game.phase == BlackjackPhase.playerBust;
@@ -324,11 +309,13 @@ class _CardMine21ScreenState extends State<CardMine21Screen>
       final winAmount = _fixedWin;
       _lastWin = winAmount;
       _winOverlayShownForRound = true;
+      unawaited(AnalyticsService.reportGameWin(_gameName));
       unawaited(AudioService.instance.playWin());
       _showWinOverlay(winAmount);
       _creditWinPayout(winAmount);
     }
     if (_isLoseState && !_showResultOverlay) {
+      unawaited(AnalyticsService.reportGameLoss(_gameName));
       unawaited(
         Future<void>.delayed(_resultDelay).then((_) {
           if (!mounted) return;

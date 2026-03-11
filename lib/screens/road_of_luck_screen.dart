@@ -3,11 +3,24 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:gold_mine_trolls/services/analytics_service.dart';
+import 'package:gold_mine_trolls/services/balance_service.dart';
+import 'package:gold_mine_trolls/services/road_of_luck_service.dart';
 import 'package:gold_mine_trolls/widgets/pressable_button.dart';
 
 /// Road of Luck screen — full screen with bg, title, close button
-class RoadOfLuckScreen extends StatelessWidget {
+class RoadOfLuckScreen extends StatefulWidget {
   const RoadOfLuckScreen({super.key});
+
+  @override
+  State<RoadOfLuckScreen> createState() => _RoadOfLuckScreenState();
+}
+
+class _RoadOfLuckScreenState extends State<RoadOfLuckScreen> {
+  static const _glowOrange = Color(0xFFFF9F2D);
+  static const _glowGray = Color(0xFF8A8A8A);
+  static const _activeTextColor = Color(0xFFFFEA4C);
+  static const _inactiveTextColor = Color(0xFFB8B8B8);
 
   static const _topPadding = 24.0;
   static const _titleTop = 47.0 + _topPadding;
@@ -45,6 +58,62 @@ class RoadOfLuckScreen extends StatelessWidget {
     'FREE',
     'FREE',
   ];
+
+  int _currentStep = 0;
+  bool _loading = true;
+  bool _processingPurchase = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProgress();
+  }
+
+  Future<void> _loadProgress() async {
+    final current = await RoadOfLuckService.getCurrentStep();
+    if (!mounted) return;
+    setState(() {
+      _currentStep = current;
+      _loading = false;
+    });
+  }
+
+  bool _isActiveStep(int index) => !_loading && !_processingPurchase && index == _currentStep;
+
+  double _priceValue(String price) {
+    if (price == 'FREE') return 0;
+    return double.tryParse(price.replaceAll('\$', '')) ?? 0;
+  }
+
+  Future<void> _claimStep(int index) async {
+    if (!_isActiveStep(index)) return;
+    HapticFeedback.lightImpact();
+    final itemId = 'road_of_luck_step_${index + 1}';
+    final price = _prices[index];
+    setState(() => _processingPurchase = true);
+    await AnalyticsService.reportPurchaseClick(itemId: itemId, type: 'coin');
+    try {
+      await BalanceService.addBalance(_amounts[index]);
+      final nextStep = await RoadOfLuckService.advanceStep();
+      await AnalyticsService.reportPurchaseSuccess(
+        itemId: itemId,
+        price: _priceValue(price),
+        type: 'coin',
+      );
+      if (!mounted) return;
+      setState(() {
+        _currentStep = nextStep;
+        _processingPurchase = false;
+      });
+    } catch (_) {
+      await AnalyticsService.reportPurchaseError(
+        itemId: itemId,
+        type: 'coin',
+      );
+      if (!mounted) return;
+      setState(() => _processingPurchase = false);
+    }
+  }
 
   static String _formatCoins(int value) {
     final s = value.toString();
@@ -192,9 +261,9 @@ class RoadOfLuckScreen extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        _buildBagBg(_amounts[leftIndex], _prices[leftIndex]),
+        _buildBagTile(leftIndex),
         const SizedBox(width: _gap),
-        _buildBagBg(_amounts[rightIndex], _prices[rightIndex]),
+        _buildBagTile(rightIndex),
       ],
     );
   }
@@ -214,7 +283,53 @@ class RoadOfLuckScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildBagBg(int amount, String price) {
+  Widget _buildBagTile(int index) {
+    final amount = _amounts[index];
+    final price = _prices[index];
+    final isActive = _isActiveStep(index);
+    final glowColor = isActive ? _glowOrange : _glowGray;
+    final cardContent = _buildBagBg(amount, price, isActive);
+    final content = AnimatedContainer(
+      duration: const Duration(milliseconds: 180),
+      width: _bagBgWidth,
+      height: _bagBgHeight,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(28),
+        boxShadow: [
+          BoxShadow(
+            color: glowColor.withValues(alpha: isActive ? 0.8 : 0.28),
+            blurRadius: isActive ? 22 : 12,
+            spreadRadius: isActive ? 4 : 1,
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(26),
+        child: isActive
+            ? cardContent
+            : Opacity(
+                opacity: 0.72,
+                child: ColorFiltered(
+                  colorFilter: const ColorFilter.matrix([
+                    0.2126, 0.7152, 0.0722, 0, 0,
+                    0.2126, 0.7152, 0.0722, 0, 0,
+                    0.2126, 0.7152, 0.0722, 0, 0,
+                    0, 0, 0, 1, 0,
+                  ]),
+                  child: cardContent,
+                ),
+              ),
+      ),
+    );
+
+    if (!isActive) return content;
+    return PressableButton(
+      onTap: () => _claimStep(index),
+      child: content,
+    );
+  }
+
+  Widget _buildBagBg(int amount, String price, bool isActive) {
     final amountText = _formatCoins(amount);
     return SizedBox(
       width: _bagBgWidth,
@@ -253,7 +368,7 @@ class RoadOfLuckScreen extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 6),
-                _buildAmountText(amountText),
+                _buildAmountText(amountText, isActive),
               ],
             ),
           ),
@@ -276,7 +391,7 @@ class RoadOfLuckScreen extends StatelessWidget {
             right: 0,
             bottom: 20,
             child: Center(
-              child: _buildPriceSection(price),
+              child: _buildPriceSection(price, isActive),
             ),
           ),
         ],
@@ -284,7 +399,8 @@ class RoadOfLuckScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildPriceSection(String price) {
+  Widget _buildPriceSection(String price, bool isActive) {
+    final textColor = isActive ? _activeTextColor : _inactiveTextColor;
     return Stack(
       clipBehavior: Clip.none,
       alignment: Alignment.center,
@@ -331,7 +447,7 @@ class RoadOfLuckScreen extends StatelessWidget {
                   fontSize: 19.11,
                   height: 1.6,
                   letterSpacing: -0.02,
-                  color: _amountColor,
+                  color: textColor,
                   shadows: [
                     Shadow(
                       color: _borderColor,
@@ -348,7 +464,8 @@ class RoadOfLuckScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildAmountText(String text) {
+  Widget _buildAmountText(String text, bool isActive) {
+    final textColor = isActive ? _amountColor : _inactiveTextColor;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
       child: Stack(
@@ -380,7 +497,7 @@ class RoadOfLuckScreen extends StatelessWidget {
               fontSize: _amountFontSize,
               height: 1.6,
               letterSpacing: -0.02,
-              color: _amountColor,
+              color: textColor,
               shadows: [
                 Shadow(
                   color: _borderColor,

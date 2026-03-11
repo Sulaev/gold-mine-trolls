@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:gold_mine_trolls/screens/info_screen.dart';
 import 'package:gold_mine_trolls/screens/shop_screen.dart';
+import 'package:gold_mine_trolls/services/analytics_service.dart';
 import 'package:gold_mine_trolls/services/audio_service.dart';
 import 'package:gold_mine_trolls/services/balance_service.dart';
 import 'package:gold_mine_trolls/widgets/pressable_button.dart';
@@ -20,6 +21,7 @@ class ChiefTrollsWheelScreen extends StatefulWidget {
 
 class _ChiefTrollsWheelScreenState extends State<ChiefTrollsWheelScreen>
     with TickerProviderStateMixin {
+  static const _gameName = 'chief_trolls_wheel';
   static const _minBet = 50;
   static const _baseBet = 10000;
   static const _betStep = 50;
@@ -64,6 +66,7 @@ class _ChiefTrollsWheelScreenState extends State<ChiefTrollsWheelScreen>
   @override
   void initState() {
     super.initState();
+    unawaited(AnalyticsService.reportGameStart(_gameName));
     _rng = math.Random();
     _spinController = AnimationController(
       vsync: this,
@@ -157,7 +160,7 @@ class _ChiefTrollsWheelScreenState extends State<ChiefTrollsWheelScreen>
       barrierColor: const Color(0x80000000),
       transitionDuration: const Duration(milliseconds: 200),
       pageBuilder: (context, animation, secondaryAnimation) =>
-          const ShopScreen(),
+          const ShopScreen(source: 'chief_trolls_wheel'),
     );
   }
 
@@ -285,6 +288,7 @@ class _ChiefTrollsWheelScreenState extends State<ChiefTrollsWheelScreen>
     if (next == _bet) return;
     setState(() => _bet = next);
     await BalanceService.setLastBet(_bet);
+    unawaited(AnalyticsService.reportBetChange(_gameName, _bet));
     HapticFeedback.selectionClick();
   }
 
@@ -298,16 +302,6 @@ class _ChiefTrollsWheelScreenState extends State<ChiefTrollsWheelScreen>
   double _zoneCenterAngle(int index) {
     final sector = (2 * math.pi) / _zoneMultipliers.length;
     return (_firstZoneCenterDeg * math.pi / 180) + index * sector;
-  }
-
-  int _indexAtTop(double angle) {
-    final sector = (2 * math.pi) / _zoneMultipliers.length;
-    final pointerInWheel = _normalizeAngle(-angle);
-    final fromFirst = _normalizeAngle(
-      pointerInWheel - (_firstZoneCenterDeg * math.pi / 180),
-    );
-    return ((fromFirst + sector / 2) / sector).floor() %
-        _zoneMultipliers.length;
   }
 
   double _pickWeightedMultiplier() {
@@ -388,11 +382,13 @@ class _ChiefTrollsWheelScreenState extends State<ChiefTrollsWheelScreen>
     _animateBalanceChange(durationMs: 760);
     await BalanceService.setBalance(settledBalance);
     if (winAmount > 0) {
+      unawaited(AnalyticsService.reportGameWin(_gameName));
       unawaited(AudioService.instance.playWin());
       if (landedMultiplier == 3 || landedMultiplier == 10) {
         _showWinOverlay(winAmount);
       }
     } else {
+      unawaited(AnalyticsService.reportGameLoss(_gameName));
       unawaited(AudioService.instance.playLose());
     }
   }

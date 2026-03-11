@@ -8,11 +8,13 @@ import 'package:gold_mine_trolls/screens/chief_trolls_wheel_screen.dart';
 import 'package:gold_mine_trolls/screens/golden_avalanche_screen.dart';
 import 'package:gold_mine_trolls/screens/gold_vein_screen.dart';
 import 'package:gold_mine_trolls/screens/mine_depth_tower_screen.dart';
+import 'package:gold_mine_trolls/screens/miners_pass_screen.dart';
 import 'package:gold_mine_trolls/screens/miners_wheel_of_fortune_screen.dart';
 import 'package:gold_mine_trolls/screens/road_of_luck_screen.dart';
 import 'package:gold_mine_trolls/screens/settings_screen.dart';
 import 'package:gold_mine_trolls/screens/shop_screen.dart';
 import 'package:gold_mine_trolls/screens/treasure_trail_ladder_screen.dart';
+import 'package:gold_mine_trolls/services/analytics_service.dart';
 import 'package:gold_mine_trolls/services/balance_service.dart';
 import 'package:gold_mine_trolls/widgets/pressable_button.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -204,11 +206,12 @@ class _HomeScreenState extends State<HomeScreen>
       barrierColor: const Color(0x80000000),
       transitionDuration: const Duration(milliseconds: 200),
       pageBuilder: (context, animation, secondaryAnimation) =>
-          const ShopScreen(),
+          const ShopScreen(source: 'home'),
     );
   }
 
   void _openSettings(BuildContext context) {
+    AnalyticsService.reportSettingsOpen();
     showGeneralDialog(
       context: context,
       barrierDismissible: true,
@@ -265,10 +268,20 @@ class _HomeScreenState extends State<HomeScreen>
       Positioned(
         top: minersTop,
         left: minersLeft,
-        child: _buildTopIcon(
-          'assets/images/main_screen/icon_miners_pass.png',
-          _minersPassWidth,
-          _minersPassHeight,
+        child: PressableButton(
+          onTap: () {
+            HapticFeedback.lightImpact();
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (context) => const MinersPassScreen(source: 'vip'),
+              ),
+            );
+          },
+          child: _buildTopIcon(
+            'assets/images/main_screen/icon_miners_pass.png',
+            _minersPassWidth,
+            _minersPassHeight,
+          ),
         ),
       ),
     ];

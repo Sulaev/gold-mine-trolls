@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:gold_mine_trolls/screens/shop_screen.dart';
+import 'package:gold_mine_trolls/services/analytics_service.dart';
 import 'package:gold_mine_trolls/services/audio_service.dart';
 import 'package:gold_mine_trolls/services/balance_service.dart';
 import 'package:gold_mine_trolls/widgets/pressable_button.dart';
@@ -21,6 +22,7 @@ class GoldenAvalancheScreen extends StatefulWidget {
 
 class _GoldenAvalancheScreenState extends State<GoldenAvalancheScreen>
     with TickerProviderStateMixin {
+  static const _gameName = 'golden_avalanche';
   static const _betStep = 50;
   static const _minBet = 50;
   static const _baseBet = 10000;
@@ -66,6 +68,7 @@ class _GoldenAvalancheScreenState extends State<GoldenAvalancheScreen>
   @override
   void initState() {
     super.initState();
+    unawaited(AnalyticsService.reportGameStart(_gameName));
     _balanceCountController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 520),
@@ -148,7 +151,7 @@ class _GoldenAvalancheScreenState extends State<GoldenAvalancheScreen>
       barrierColor: const Color(0x80000000),
       transitionDuration: const Duration(milliseconds: 200),
       pageBuilder: (context, animation, secondaryAnimation) =>
-          const ShopScreen(),
+          const ShopScreen(source: 'golden_avalanche'),
     );
   }
 
@@ -287,6 +290,11 @@ class _GoldenAvalancheScreenState extends State<GoldenAvalancheScreen>
           ball.y = chestRowTop - ballR;
 
           unawaited(AudioService.instance.playGoldenAvalancheCoin());
+          if (win > 0) {
+            unawaited(AnalyticsService.reportGameWin(_gameName));
+          } else {
+            unawaited(AnalyticsService.reportGameLoss(_gameName));
+          }
           final newBalance = _balance + win;
           setState(() {
             _balance = newBalance;
@@ -300,6 +308,7 @@ class _GoldenAvalancheScreenState extends State<GoldenAvalancheScreen>
           _animateBalanceChange(durationMs: 420);
           BalanceService.setBalance(newBalance);
         } else {
+          unawaited(AnalyticsService.reportGameLoss(_gameName));
           ball.chestIndex = -1;
           ball.win = 0;
           ball.y = chestRowTop - ballR;
@@ -372,6 +381,7 @@ class _GoldenAvalancheScreenState extends State<GoldenAvalancheScreen>
     if (next == _bet) return;
     setState(() => _bet = next);
     await BalanceService.setLastBet(_bet);
+    unawaited(AnalyticsService.reportBetChange(_gameName, _bet));
     HapticFeedback.selectionClick();
   }
 
@@ -380,6 +390,7 @@ class _GoldenAvalancheScreenState extends State<GoldenAvalancheScreen>
     if (_bet == _balance) return;
     setState(() => _bet = _balance);
     BalanceService.setLastBet(_bet);
+    unawaited(AnalyticsService.reportBetChange(_gameName, _bet));
     HapticFeedback.selectionClick();
   }
 

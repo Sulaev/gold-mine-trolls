@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:gold_mine_trolls/screens/info_screen.dart';
 import 'package:gold_mine_trolls/screens/shop_screen.dart';
+import 'package:gold_mine_trolls/services/analytics_service.dart';
 import 'package:gold_mine_trolls/services/audio_service.dart';
 import 'package:gold_mine_trolls/services/balance_service.dart';
 import 'package:gold_mine_trolls/widgets/pressable_button.dart';
@@ -21,6 +22,7 @@ class TreasureTrailLadderScreen extends StatefulWidget {
 
 class _TreasureTrailLadderScreenState extends State<TreasureTrailLadderScreen>
     with TickerProviderStateMixin {
+  static const _gameName = 'treasure_trail_ladder';
   static const _minBet = 50;
   static const _baseBet = 10000;
   static const _betStep = 50;
@@ -74,6 +76,7 @@ class _TreasureTrailLadderScreenState extends State<TreasureTrailLadderScreen>
   @override
   void initState() {
     super.initState();
+    unawaited(AnalyticsService.reportGameStart(_gameName));
     _balanceCountController =
         AnimationController(
           vsync: this,
@@ -162,7 +165,7 @@ class _TreasureTrailLadderScreenState extends State<TreasureTrailLadderScreen>
       barrierColor: const Color(0x80000000),
       transitionDuration: const Duration(milliseconds: 200),
       pageBuilder: (context, animation, secondaryAnimation) =>
-          const ShopScreen(),
+          const ShopScreen(source: 'treasure_trail_ladder'),
     );
   }
 
@@ -321,6 +324,7 @@ class _TreasureTrailLadderScreenState extends State<TreasureTrailLadderScreen>
     if (next == _bet) return;
     setState(() => _bet = next);
     await BalanceService.setLastBet(_bet);
+    unawaited(AnalyticsService.reportBetChange(_gameName, _bet));
     HapticFeedback.selectionClick();
   }
 
@@ -330,6 +334,7 @@ class _TreasureTrailLadderScreenState extends State<TreasureTrailLadderScreen>
     if (next == _bet) return;
     setState(() => _bet = next);
     await BalanceService.setLastBet(_bet);
+    unawaited(AnalyticsService.reportBetChange(_gameName, _bet));
     HapticFeedback.selectionClick();
   }
 
@@ -406,6 +411,7 @@ class _TreasureTrailLadderScreenState extends State<TreasureTrailLadderScreen>
     await BalanceService.setBalance(next);
     HapticFeedback.lightImpact();
     if (wonAmount > 0) {
+      unawaited(AnalyticsService.reportGameWin(_gameName));
       unawaited(AudioService.instance.playWin());
       _showWinOverlay(wonAmount);
     }
@@ -459,6 +465,7 @@ class _TreasureTrailLadderScreenState extends State<TreasureTrailLadderScreen>
       _isResolvingPick = false;
       _selected.clear();
     });
+    unawaited(AnalyticsService.reportGameLoss(_gameName));
     unawaited(AudioService.instance.playLose());
     await Future.delayed(const Duration(milliseconds: 450));
     if (!mounted) return;

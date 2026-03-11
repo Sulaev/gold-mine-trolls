@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:gold_mine_trolls/screens/info_screen.dart';
+import 'package:gold_mine_trolls/services/analytics_service.dart';
 import 'package:gold_mine_trolls/services/audio_service.dart';
 import 'package:gold_mine_trolls/screens/shop_screen.dart';
 import 'package:gold_mine_trolls/services/balance_service.dart';
@@ -19,6 +20,7 @@ class MineDepthTowerScreen extends StatefulWidget {
 
 class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
     with TickerProviderStateMixin {
+  static const _gameName = 'mine_depth_tower';
   static const _betStep = 50;
   static const _minBet = 50;
   static const _baseBet = 10000;
@@ -53,6 +55,7 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
   @override
   void initState() {
     super.initState();
+    unawaited(AnalyticsService.reportGameStart(_gameName));
     _breathController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1700),
@@ -167,7 +170,7 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
       barrierColor: const Color(0x80000000),
       transitionDuration: const Duration(milliseconds: 200),
       pageBuilder: (context, animation, secondaryAnimation) =>
-          const ShopScreen(),
+          const ShopScreen(source: 'mine_depth_tower'),
     );
   }
 
@@ -227,6 +230,7 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
     if (next == _bet) return;
     setState(() => _bet = next);
     await BalanceService.setLastBet(_bet);
+    unawaited(AnalyticsService.reportBetChange(_gameName, _bet));
     HapticFeedback.selectionClick();
   }
 
@@ -267,6 +271,7 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
       });
       SystemSound.play(SystemSoundType.click);
     } else {
+      unawaited(AnalyticsService.reportGameLoss(_gameName));
       setState(() {
         _inRun = false;
         _isLoseReaction = false;
@@ -306,6 +311,7 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
 
   Future<void> _collectWin() async {
     if (!_inRun || _potentialWin <= 0 || _isMoving) return;
+    unawaited(AnalyticsService.reportGameWin(_gameName));
     unawaited(AudioService.instance.playWin());
     final next = _balance + _potentialWin;
     setState(() {

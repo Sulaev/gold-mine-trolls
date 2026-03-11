@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:gold_mine_trolls/screens/home_screen.dart';
+import 'package:gold_mine_trolls/services/analytics_service.dart';
 import 'package:gold_mine_trolls/services/audio_service.dart';
 import 'package:gold_mine_trolls/screens/roulette_constants.dart';
 import 'package:gold_mine_trolls/screens/shop_screen.dart';
@@ -86,6 +87,7 @@ class _WinBannerBorderPainter extends CustomPainter {
 
 class _MinersWheelOfFortuneScreenState extends State<MinersWheelOfFortuneScreen>
     with TickerProviderStateMixin {
+  static const _gameName = 'miners_wheel_of_fortune';
   static const _betStep = 50;
   static const _minBet = 50;
   static const _baseBet = 10000;
@@ -187,6 +189,7 @@ class _MinersWheelOfFortuneScreenState extends State<MinersWheelOfFortuneScreen>
   @override
   void initState() {
     super.initState();
+    unawaited(AnalyticsService.reportGameStart(_gameName));
     _idleSpinController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 24),
@@ -305,7 +308,7 @@ class _MinersWheelOfFortuneScreenState extends State<MinersWheelOfFortuneScreen>
       barrierColor: const Color(0x80000000),
       transitionDuration: const Duration(milliseconds: 200),
       pageBuilder: (context, animation, secondaryAnimation) =>
-          const ShopScreen(),
+          const ShopScreen(source: 'miners_wheel_of_fortune'),
     );
   }
 
@@ -566,6 +569,7 @@ class _MinersWheelOfFortuneScreenState extends State<MinersWheelOfFortuneScreen>
     if (next == _bet) return;
     setState(() => _bet = next);
     unawaited(BalanceService.setLastBet(_bet));
+    unawaited(AnalyticsService.reportBetChange(_gameName, _bet));
     if (haptic) HapticFeedback.selectionClick();
   }
 
@@ -682,6 +686,7 @@ class _MinersWheelOfFortuneScreenState extends State<MinersWheelOfFortuneScreen>
     });
     unawaited(BalanceService.setMinersWheelLastWin(totalWin));
     if (totalWin > 0) {
+      unawaited(AnalyticsService.reportGameWin(_gameName));
       unawaited(AudioService.instance.playWin());
       setState(() => _balance += totalWin);
       _animateBalanceChange(durationMs: 760);
@@ -690,6 +695,7 @@ class _MinersWheelOfFortuneScreenState extends State<MinersWheelOfFortuneScreen>
         _showWinOverlay(totalWin);
       }
     } else {
+      unawaited(AnalyticsService.reportGameLoss(_gameName));
       setState(() => _isWinOverlayVisible = false);
     }
 

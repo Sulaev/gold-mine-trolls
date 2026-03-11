@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:gold_mine_trolls/screens/info_screen.dart';
 import 'package:gold_mine_trolls/screens/shop_screen.dart';
+import 'package:gold_mine_trolls/services/analytics_service.dart';
 import 'package:gold_mine_trolls/services/audio_service.dart';
 import 'package:gold_mine_trolls/services/balance_service.dart';
 import 'package:gold_mine_trolls/widgets/pressable_button.dart';
@@ -20,6 +21,7 @@ class CautiousMinerScreen extends StatefulWidget {
 
 class _CautiousMinerScreenState extends State<CautiousMinerScreen>
     with TickerProviderStateMixin {
+  static const _gameName = 'cautious_miner';
   static const _minBet = 50;
   static const _baseBet = 10000;
   static const _betStep = 50;
@@ -60,6 +62,7 @@ class _CautiousMinerScreenState extends State<CautiousMinerScreen>
   @override
   void initState() {
     super.initState();
+    unawaited(AnalyticsService.reportGameStart(_gameName));
     _balanceCountController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 520),
@@ -145,7 +148,7 @@ class _CautiousMinerScreenState extends State<CautiousMinerScreen>
       barrierColor: const Color(0x80000000),
       transitionDuration: const Duration(milliseconds: 200),
       pageBuilder: (context, animation, secondaryAnimation) =>
-          const ShopScreen(),
+          const ShopScreen(source: 'cautious_miner'),
     );
   }
 
@@ -234,6 +237,7 @@ class _CautiousMinerScreenState extends State<CautiousMinerScreen>
     if (next == _bet) return;
     setState(() => _bet = next);
     await BalanceService.setLastBet(_bet);
+    unawaited(AnalyticsService.reportBetChange(_gameName, _bet));
     HapticFeedback.selectionClick();
   }
 
@@ -269,6 +273,7 @@ class _CautiousMinerScreenState extends State<CautiousMinerScreen>
     await BalanceService.setBalance(next);
     HapticFeedback.lightImpact();
     if (wonAmount > 0) {
+      unawaited(AnalyticsService.reportGameWin(_gameName));
       unawaited(AudioService.instance.playWin());
       _showWinOverlay(wonAmount);
     }
@@ -307,6 +312,7 @@ class _CautiousMinerScreenState extends State<CautiousMinerScreen>
       _inRun = false;
       _potentialWin = 0;
     });
+    unawaited(AnalyticsService.reportGameLoss(_gameName));
     unawaited(AudioService.instance.playCautiousMinerBoom());
     await Future.delayed(const Duration(milliseconds: 350));
     if (!mounted) return;

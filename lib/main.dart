@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'screens/onboarding_screen.dart';
+import 'services/analytics_service.dart';
 import 'services/audio_service.dart';
 import 'services/balance_service.dart';
 import 'services/logger_service.dart';
@@ -18,6 +19,7 @@ Future<void> main() async {
   LoggerService.init();
   LoggerService.info('Gold Mine Trolls started');
 
+  await AnalyticsService.init();
   await BalanceService.init();
   await SettingsService.init();
 
@@ -58,6 +60,9 @@ class _GoldMineTrollsAppState extends State<GoldMineTrollsApp>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       AudioService.instance.onAppResumed();
+    } else if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached) {
+      AnalyticsService.reportAppClose();
     }
   }
 
