@@ -5,12 +5,14 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:gold_mine_trolls/screens/info_screen.dart';
+import 'package:gold_mine_trolls/screens/miners_pass_screen.dart';
 import 'package:gold_mine_trolls/screens/shop_screen.dart';
 import 'package:gold_mine_trolls/services/analytics_service.dart';
 import 'package:gold_mine_trolls/services/audio_service.dart';
 import 'package:gold_mine_trolls/services/balance_service.dart';
 import 'package:gold_mine_trolls/widgets/pressable_button.dart';
 import 'package:gold_mine_trolls/widgets/tap_banner.dart';
+import 'package:gold_mine_trolls/widgets/warning_panel.dart';
 
 class TreasureTrailLadderScreen extends StatefulWidget {
   const TreasureTrailLadderScreen({super.key});
@@ -64,6 +66,10 @@ class _TreasureTrailLadderScreenState extends State<TreasureTrailLadderScreen>
   bool _isResolvingPick = false;
   int _overlayTargetWin = 0;
   int _overlayAnimatedWin = 0;
+
+  Timer? _adjustTimer;
+  Stopwatch? _adjustWatch;
+  int _activeDelta = 0;
 
   // true = gold, false = dynamite
   List<List<bool>> _rowMap = List.generate(
@@ -125,6 +131,8 @@ class _TreasureTrailLadderScreenState extends State<TreasureTrailLadderScreen>
   @override
   void dispose() {
     BalanceService.balanceNotifier.removeListener(_onBalanceNotifierChanged);
+    _adjustTimer?.cancel();
+    _adjustWatch?.stop();
     _balanceCountController.dispose();
     _notificationController.dispose();
     _winCountController.dispose();
@@ -318,14 +326,34 @@ class _TreasureTrailLadderScreenState extends State<TreasureTrailLadderScreen>
 
   int _cellKey(int row, int col) => row * 100 + col;
 
-  Future<void> _applyBetDelta(int delta) async {
+  Future<void> _applyBetDelta(int delta, {bool haptic = true}) async {
     if (_loadingBalance || _balance <= 0 || _inRun) return;
     final next = (_bet + delta).clamp(_minBet, _balance);
     if (next == _bet) return;
     setState(() => _bet = next);
     await BalanceService.setLastBet(_bet);
     unawaited(AnalyticsService.reportBetChange(_gameName, _bet));
-    HapticFeedback.selectionClick();
+    if (haptic) HapticFeedback.selectionClick();
+  }
+
+  void _startContinuousBetAdjust(int delta) {
+    _adjustTimer?.cancel();
+    _activeDelta = delta;
+    _adjustWatch = Stopwatch()..start();
+    _adjustTimer = Timer.periodic(const Duration(milliseconds: 40), (_) {
+      final elapsed = _adjustWatch?.elapsedMilliseconds ?? 0;
+      var factor = 3;
+      if (elapsed >= 800 && elapsed < 2000) factor = 6;
+      if (elapsed >= 2000) factor = 12;
+      unawaited(_applyBetDelta(_activeDelta * _betStep * factor, haptic: false));
+    });
+  }
+
+  void _stopContinuousBetAdjust() {
+    _adjustTimer?.cancel();
+    _adjustTimer = null;
+    _adjustWatch?.stop();
+    _adjustWatch = null;
   }
 
   Future<void> _setQuickBet(int nextBet) async {
@@ -378,7 +406,13 @@ class _TreasureTrailLadderScreenState extends State<TreasureTrailLadderScreen>
 
   Future<void> _startRun() async {
     if (_loadingBalance || _inRun || _isGameOver) return;
-    if (_bet <= 0 || _balance < _bet) return;
+    if (_bet <= 0 || _balance < _bet) {
+      showWarningSnackBar(
+        context,
+        'Not enough coins to start the game.',
+      );
+      return;
+    }
     final nextBalance = _balance - _bet;
     setState(() {
       _balance = nextBalance;
@@ -439,7 +473,6 @@ class _TreasureTrailLadderScreenState extends State<TreasureTrailLadderScreen>
       _revealed.add(key);
     });
     HapticFeedback.selectionClick();
-    await Future.delayed(const Duration(milliseconds: 700));
     if (!mounted) return;
     setState(() {
       for (var c = 0; c < _cols; c++) {
@@ -650,7 +683,15 @@ class _TreasureTrailLadderScreenState extends State<TreasureTrailLadderScreen>
               height: 80 * scale,
               tapScale: 0.62,
               tapOffset: const Offset(0, 59),
-              onTap: () {},
+              onTap: () {
+                HapticFeedback.lightImpact();
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        const MinersPassScreen(source: 'treasure_trail_ladder'),
+                  ),
+                );
+              },
             ),
           ),
           SizedBox(width: 42 * scale),
@@ -908,6 +949,9 @@ class _TreasureTrailLadderScreenState extends State<TreasureTrailLadderScreen>
                   left: -12 * scale,
                   child: PressableButton(
                     onTap: () => _applyBetDelta(-_betStep),
+                    onLongPressStart: (_) => _startContinuousBetAdjust(-1),
+                    onLongPressEnd: (_) => _stopContinuousBetAdjust(),
+                    onLongPressCancel: _stopContinuousBetAdjust,
                     child: SizedBox(
                       width: 29 * scale,
                       height: 52 * scale,
@@ -922,6 +966,9 @@ class _TreasureTrailLadderScreenState extends State<TreasureTrailLadderScreen>
                   right: -12 * scale,
                   child: PressableButton(
                     onTap: () => _applyBetDelta(_betStep),
+                    onLongPressStart: (_) => _startContinuousBetAdjust(1),
+                    onLongPressEnd: (_) => _stopContinuousBetAdjust(),
+                    onLongPressCancel: _stopContinuousBetAdjust,
                     child: SizedBox(
                       width: 29 * scale,
                       height: 52 * scale,

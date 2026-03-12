@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:gold_mine_trolls/widgets/pressable_button.dart';
 
 /// Reusable info overlay — info_back.png panel. Tap outside to close.
 /// Content is game-specific (passed as child).
@@ -14,6 +15,9 @@ class InfoScreen extends StatelessWidget {
 
   static const _panelWidth = 360.0;
   static const _panelHeight = 615.0;
+  static const _closeBtnSize = 38.0;
+  static const _closeBtnRightMargin = 16.0;
+  static const _closeBtnTop = 16.0;
 
   /// Main text style (Gilroy-like): 12px, Bold, #FFFFFF, center.
   static TextStyle mainTextStyle() {
@@ -93,6 +97,36 @@ class InfoScreen extends StatelessWidget {
                               borderRadius: BorderRadius.circular(16),
                             ),
                           ),
+                    ),
+                    Positioned(
+                      top: _closeBtnTop,
+                      right: _closeBtnRightMargin,
+                      child: PressableButton(
+                        onTap: () {
+                          HapticFeedback.lightImpact();
+                          Navigator.of(context).pop();
+                        },
+                        child: SizedBox(
+                          width: _closeBtnSize,
+                          height: _closeBtnSize,
+                          child: Image.asset(
+                            'assets/images/shop/btn_close.png',
+                            fit: BoxFit.contain,
+                            errorBuilder: (context, error, stackTrace) =>
+                                Container(
+                              decoration: BoxDecoration(
+                                color: Colors.white24,
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.close,
+                                color: Colors.white,
+                                size: 24,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
                     ),
                     Positioned(
                       top: 56,

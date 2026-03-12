@@ -15,7 +15,8 @@ class WelcomeBonusScreen extends StatefulWidget {
   State<WelcomeBonusScreen> createState() => _WelcomeBonusScreenState();
 }
 
-class _WelcomeBonusScreenState extends State<WelcomeBonusScreen> {
+class _WelcomeBonusScreenState extends State<WelcomeBonusScreen>
+    with SingleTickerProviderStateMixin {
   static const _buttonWidth = 238.0;
   static const _buttonHeight = 82.0;
   static const _buttonBottomOffset = 51.0;
@@ -23,12 +24,30 @@ class _WelcomeBonusScreenState extends State<WelcomeBonusScreen> {
   static const _trollWidth = 546.0;
   static const _trollHeight = 449.0;
   static const _trollOffsetX = 100.0;
+  static const _trollOffsetRight = 25.0;
+  static const _trollOffsetDown = 35.0;
   int _bonusAmount = 10000;
+
+  late final AnimationController _pulseController;
+  late final Animation<double> _pulseAnimation;
 
   @override
   void initState() {
     super.initState();
     _loadBonusAmount();
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat(reverse: true);
+    _pulseAnimation = Tween<double>(begin: 0.96, end: 1.04).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _pulseController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadBonusAmount() async {
@@ -117,17 +136,23 @@ class _WelcomeBonusScreenState extends State<WelcomeBonusScreen> {
                     ),
                   ),
                   const SizedBox(height: 12),
-                  _buildBonusBox(_formatAmount(_bonusAmount)),
+                  Transform.translate(
+                    offset: const Offset(0, 8),
+                    child: _buildBonusBox(_formatAmount(_bonusAmount)),
+                  ),
                   const SizedBox(height: 8),
                   Transform.translate(
-                    offset: const Offset(-_trollOffsetX, 0),
+                    offset: const Offset(
+                      -_trollOffsetX + _trollOffsetRight,
+                      _trollOffsetDown,
+                    ),
                     child: Transform.scale(
                       scale: trollScale,
                       child: SizedBox(
                         width: _trollWidth,
                         height: _trollHeight,
                         child: Image.asset(
-                          'assets/images/welcome_bonus/troll.png',
+                          'assets/images/welcome_bonus/trolls.png',
                           fit: BoxFit.contain,
                           errorBuilder: (context, error, stackTrace) => Container(
                             color: Colors.amber.withValues(alpha: 0.3),
@@ -178,36 +203,46 @@ class _WelcomeBonusScreenState extends State<WelcomeBonusScreen> {
           ),
         ],
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        mainAxisAlignment: MainAxisAlignment.center,
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          SizedBox(
-            width: 32,
-            height: 32,
-            child: Image.asset(
-              'assets/images/welcome_bonus/coin_icon.png',
-              fit: BoxFit.contain,
-              errorBuilder: (context, error, stackTrace) => const Icon(
-                Icons.monetization_on,
-                color: Color(0xFFFFEA4C),
-                size: 32,
+      child: Center(
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            SizedBox(
+              width: 32,
+              height: 32,
+              child: Image.asset(
+                'assets/images/welcome_bonus/coin_icon.png',
+                fit: BoxFit.contain,
+                errorBuilder: (context, error, stackTrace) => const Icon(
+                  Icons.monetization_on,
+                  color: Color(0xFFFFEA4C),
+                  size: 32,
+                ),
               ),
             ),
-          ),
-          const SizedBox(width: 8),
-          Text(
-            amountText,
-            style: GoogleFonts.gothicA1(
-              color: const Color(0xFFFFFFFF),
-              fontSize: 24,
-              fontWeight: FontWeight.w900,
-              height: 1.0,
-              letterSpacing: -0.48,
+            const SizedBox(width: 8),
+            SizedBox(
+              height: 32,
+              child: Center(
+                child: Transform.translate(
+                  offset: const Offset(0, 2),
+                  child: Text(
+                    amountText,
+                    style: GoogleFonts.gothicA1(
+                      color: const Color(0xFFFFFFFF),
+                      fontSize: 24,
+                      fontWeight: FontWeight.w900,
+                      height: 1.0,
+                      letterSpacing: -0.48,
+                    ),
+                  ),
+                ),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -235,38 +270,47 @@ class _WelcomeBonusScreenState extends State<WelcomeBonusScreen> {
   }
 
   Widget _buildGetGoldButton(BuildContext context) {
-    return PressableButton(
-      onTap: () async {
-        HapticFeedback.lightImpact();
-        final amount = await DailyBonusService.claimTodayBonus();
-        if (amount != null) {
-          await BalanceService.addBalance(amount);
-        }
-        if (!context.mounted) return;
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const HomeScreen()),
+    return AnimatedBuilder(
+      animation: _pulseAnimation,
+      builder: (context, child) {
+        return Transform.scale(
+          scale: _pulseAnimation.value,
+          child: child,
         );
       },
-      child: SizedBox(
-        width: _buttonWidth,
-        height: _buttonHeight,
-        child: Image.asset(
-          'assets/images/welcome_bonus/btn_get_gold.png',
-          fit: BoxFit.fill,
-          errorBuilder: (context, error, stackTrace) => Container(
-            width: _buttonWidth,
-            height: _buttonHeight,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: const Color(0xFFFFB347),
-              borderRadius: BorderRadius.circular(_buttonHeight / 2),
-            ),
-            child: const Text(
-              'GET FREE GOLD',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
+      child: PressableButton(
+        onTap: () async {
+          HapticFeedback.lightImpact();
+          final amount = await DailyBonusService.claimTodayBonus();
+          if (amount != null) {
+            await BalanceService.addBalance(amount);
+          }
+          if (!context.mounted) return;
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (_) => const HomeScreen()),
+          );
+        },
+        child: SizedBox(
+          width: _buttonWidth,
+          height: _buttonHeight,
+          child: Image.asset(
+            'assets/images/welcome_bonus/btn_get_gold.png',
+            fit: BoxFit.fill,
+            errorBuilder: (context, error, stackTrace) => Container(
+              width: _buttonWidth,
+              height: _buttonHeight,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFB347),
+                borderRadius: BorderRadius.circular(_buttonHeight / 2),
+              ),
+              child: const Text(
+                'GET FREE GOLD',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
           ),

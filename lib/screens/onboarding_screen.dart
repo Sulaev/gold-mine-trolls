@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:gold_mine_trolls/assets/common_assets.dart';
 import 'package:gold_mine_trolls/services/audio_service.dart';
 import 'package:gold_mine_trolls/widgets/pressable_button.dart';
+import 'package:gold_mine_trolls/widgets/warning_panel.dart';
 import 'home_screen.dart';
 import 'welcome_bonus_screen.dart';
 
@@ -29,11 +30,15 @@ class OnboardingScreen extends StatefulWidget {
   State<OnboardingScreen> createState() => _OnboardingScreenState();
 }
 
-class _OnboardingScreenState extends State<OnboardingScreen> {
+class _OnboardingScreenState extends State<OnboardingScreen>
+    with TickerProviderStateMixin {
   double _loadingProgress = 0;
   bool _termsAccepted = false;
   bool _loadingComplete = false;
-  bool _didAutoNavigate = false;
+
+  static const _termsWarningSlideDuration = Duration(milliseconds: 280);
+  static const _termsWarningPanelHeight = 90.0;
+  late final AnimationController _termsWarningController;
 
   bool get _canPlay =>
       _loadingComplete && _termsAccepted;
@@ -41,14 +46,24 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   @override
   void initState() {
     super.initState();
+    _termsWarningController = AnimationController(
+      vsync: this,
+      duration: _termsWarningSlideDuration,
+    );
     _loadTermsAccepted();
     WidgetsBinding.instance.addPostFrameCallback((_) => _performLoading());
+  }
+
+  @override
+  void dispose() {
+    _termsWarningController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadTermsAccepted() async {
     final prefs = await SharedPreferences.getInstance();
     if (!mounted) return;
-    setState(() => _termsAccepted = prefs.getBool('terms_accepted') ?? false);
+    setState(() => _termsAccepted = prefs.getBool('terms_accepted') ?? true);
   }
 
   Future<void> _performLoading() async {
@@ -66,7 +81,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       _loadingProgress = 1.0;
       _loadingComplete = true;
     });
-    await _continueIfReturningUser();
+    if (!_termsAccepted) {
+      _termsWarningController.forward();
+    }
   }
 
   Future<void> _precacheAll() async {
@@ -152,26 +169,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('terms_accepted', true);
     await prefs.setBool('onboarding_completed', true);
+    final isBonusAvailable = await DailyBonusService.isBonusAvailableToday();
 
-    if (!mounted) return;
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => const WelcomeBonusScreen()),
-    );
-  }
-
-  Future<void> _continueIfReturningUser() async {
-    if (!mounted || _didAutoNavigate) return;
-    final prefs = await SharedPreferences.getInstance();
-    final onboardingCompleted = prefs.getBool('onboarding_completed') ?? false;
-    if (!onboardingCompleted) return;
-
-    _didAutoNavigate = true;
-    final hasBonusToday = await DailyBonusService.isBonusAvailableToday();
     if (!mounted) return;
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(
-        builder: (_) =>
-            hasBonusToday ? const WelcomeBonusScreen() : const HomeScreen(),
+        builder: (_) => isBonusAvailable
+            ? const WelcomeBonusScreen()
+            : const HomeScreen(),
       ),
     );
   }
@@ -180,12 +185,18 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     HapticFeedback.selectionClick();
     final newValue = !_termsAccepted;
     setState(() => _termsAccepted = newValue);
+    if (newValue) {
+      _termsWarningController.reverse();
+    } else if (_loadingComplete) {
+      _termsWarningController.forward();
+    }
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('terms_accepted', newValue);
   }
 
   @override
   Widget build(BuildContext context) {
+    final topPadding = MediaQuery.paddingOf(context).top;
     return Scaffold(
       body: Stack(
         fit: StackFit.expand,
@@ -209,6 +220,38 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               ),
             ),
           ),
+          if (_loadingComplete && (_termsWarningController.value > 0 || !_termsAccepted))
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: AnimatedBuilder(
+                animation: _termsWarningController,
+                builder: (context, _) {
+                  final value = _termsWarningController.value;
+                  final curveValue = Curves.easeOutCubic.transform(value);
+                  final offsetY = -_termsWarningPanelHeight * (1 - curveValue);
+                  return Transform.translate(
+                    offset: Offset(0, offsetY),
+                    child: Padding(
+                      padding: EdgeInsets.only(
+                        top: topPadding + 8,
+                        left: 24,
+                        right: 24,
+                      ),
+                      child: Material(
+                        color: Colors.transparent,
+                        child: const WarningPanel(
+                          message:
+                              'Please confirm that you are at least 18 years old and agree to the Terms of Use and Privacy Policy.',
+                          backgroundColor: Color(0xCC4E2F1C),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
           SafeArea(
             child: Column(
               children: [

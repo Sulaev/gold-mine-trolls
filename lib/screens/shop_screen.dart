@@ -66,6 +66,7 @@ class _ShopScreenState extends State<ShopScreen> {
         child: Stack(
           fit: StackFit.expand,
           children: [
+            const ColoredBox(color: Color(0x4D000000)),
             Positioned(
               top: _shopTitleTop,
               left: 0,

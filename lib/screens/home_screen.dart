@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -121,6 +123,7 @@ class _HomeScreenState extends State<HomeScreen>
   static const _gamesHorizontalMargin = 42.0;
   static const _gameButtonSize = 140.0;
   static const _gameButtonGap = 12.0;
+  static const _gamesTopGlowPadding = 14.0;
   static const _gameShadowColor = Color(0x40FFFFFF);
   static const _tutorialOverlayColor = Color(0xB36D2E11);
   static const _tutorialCardScaleMin = 0.96;
@@ -147,6 +150,21 @@ class _HomeScreenState extends State<HomeScreen>
   bool _showTutorialStepOne = true;
   bool _tutorialStateLoaded = false;
   late final AnimationController _tutorialPulseController;
+  final ScrollController _gamesScrollController = ScrollController();
+  bool _gamesAutoScrollRunning = false;
+  int _gamesAutoScrollSession = 0;
+  Timer? _gamesIdleRestartTimer;
+  Timer? _idleScrollDelayTimer;
+  bool _wasCurrentRoute = false;
+  static const _idleScrollDelaySec = 5;
+
+  void _scheduleIdleScrollAfterDelay() {
+    _idleScrollDelayTimer?.cancel();
+    _idleScrollDelayTimer = Timer(const Duration(seconds: _idleScrollDelaySec), () {
+      _idleScrollDelayTimer = null;
+      if (mounted) _tryStartGamesIdleAutoScroll();
+    });
+  }
 
   @override
   void initState() {
@@ -160,7 +178,10 @@ class _HomeScreenState extends State<HomeScreen>
 
   @override
   void dispose() {
+    _idleScrollDelayTimer?.cancel();
     _tutorialPulseController.dispose();
+    _gamesIdleRestartTimer?.cancel();
+    _gamesScrollController.dispose();
     super.dispose();
   }
 
@@ -172,6 +193,7 @@ class _HomeScreenState extends State<HomeScreen>
       _showTutorialStepOne = !stepOneDone;
       _tutorialStateLoaded = true;
     });
+    _scheduleIdleScrollAfterDelay();
   }
 
   Future<void> _completeTutorialStepOne() async {
@@ -179,6 +201,73 @@ class _HomeScreenState extends State<HomeScreen>
     await prefs.setBool(_tutorialPrefsStepOneDone, true);
     if (!mounted) return;
     setState(() => _showTutorialStepOne = false);
+    _scheduleIdleScrollAfterDelay();
+  }
+
+  void _tryStartGamesIdleAutoScroll() {
+    if (_gamesAutoScrollRunning || !_tutorialStateLoaded || _showTutorialStepOne) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _gamesAutoScrollRunning || !_gamesScrollController.hasClients) {
+        return;
+      }
+      if (_gamesScrollController.position.maxScrollExtent <= 0) return;
+      _gamesAutoScrollRunning = true;
+      final session = ++_gamesAutoScrollSession;
+      unawaited(_runGamesIdleAutoScrollLoop(session));
+    });
+  }
+
+  void _pauseGamesAutoScrollForUserInteraction() {
+    _gamesAutoScrollSession++;
+    _gamesAutoScrollRunning = false;
+    _gamesIdleRestartTimer?.cancel();
+    _gamesIdleRestartTimer = Timer(const Duration(seconds: 5), () {
+      if (!mounted) return;
+      _tryStartGamesIdleAutoScroll();
+    });
+  }
+
+  Future<void> _runGamesIdleAutoScrollLoop(int session) async {
+    while (mounted &&
+        _gamesAutoScrollRunning &&
+        session == _gamesAutoScrollSession &&
+        _gamesScrollController.hasClients) {
+      final max = _gamesScrollController.position.maxScrollExtent;
+      if (max <= 0) break;
+      if (_gamesScrollController.position.pixels < max - 0.5) {
+        await _gamesScrollController.animateTo(
+          max,
+          duration: const Duration(seconds: 10),
+          curve: Curves.easeInOut,
+        );
+      }
+      if (!mounted ||
+          !_gamesAutoScrollRunning ||
+          session != _gamesAutoScrollSession ||
+          !_gamesScrollController.hasClients) {
+        break;
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 350));
+      if (_gamesScrollController.position.pixels > 0.5) {
+        await _gamesScrollController.animateTo(
+          0,
+          duration: const Duration(seconds: 10),
+          curve: Curves.easeInOut,
+        );
+      }
+      if (!mounted ||
+          !_gamesAutoScrollRunning ||
+          session != _gamesAutoScrollSession ||
+          !_gamesScrollController.hasClients) {
+        break;
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 350));
+    }
+    if (mounted && session == _gamesAutoScrollSession) {
+      _gamesAutoScrollRunning = false;
+    }
   }
 
   double _gamesTopOffset() {
@@ -336,7 +425,7 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
-  Widget _buildBalance() {
+  Widget _buildBalance(BuildContext context) {
     return Stack(
       clipBehavior: Clip.none,
       children: [
@@ -405,15 +494,21 @@ class _HomeScreenState extends State<HomeScreen>
         Positioned(
           top: _balanceBgHeight - _addBtnHeight / 2 - _addBtnRaise,
           left: (_balanceBgWidth - _addBtnWidth) / 2,
-          child: SizedBox(
-            width: _addBtnWidth,
-            height: _addBtnHeight,
-            child: Image.asset(
-              'assets/images/main_screen/add_btn.png',
-              fit: BoxFit.contain,
-              errorBuilder: (context, error, stackTrace) => Container(
-                color: Colors.amber.withValues(alpha: 0.3),
-                child: const Icon(Icons.add, color: Colors.white),
+          child: PressableButton(
+            onTap: () {
+              HapticFeedback.lightImpact();
+              _openShop(context);
+            },
+            child: SizedBox(
+              width: _addBtnWidth,
+              height: _addBtnHeight,
+              child: Image.asset(
+                'assets/images/main_screen/add_btn.png',
+                fit: BoxFit.contain,
+                errorBuilder: (context, error, stackTrace) => Container(
+                  color: Colors.amber.withValues(alpha: 0.3),
+                  child: const Icon(Icons.add, color: Colors.white),
+                ),
               ),
             ),
           ),
@@ -533,6 +628,9 @@ class _HomeScreenState extends State<HomeScreen>
   ) {
     return PressableButton(
       onTap: () => _onGameTap(context, index),
+      pressedScale: 0.95,
+      pressedOffset: const Offset(0, 1.8),
+      duration: const Duration(milliseconds: 120),
       child: Container(
         width: _gameButtonSize,
         height: _gameButtonSize,
@@ -565,40 +663,51 @@ class _HomeScreenState extends State<HomeScreen>
     final screenWidth = MediaQuery.of(context).size.width;
     final contentWidth = screenWidth - _gamesHorizontalMargin * 2;
     final gap = (contentWidth - _gameButtonSize * 2).clamp(8.0, 24.0);
-    return SingleChildScrollView(
-      padding: const EdgeInsets.only(bottom: 24),
-      child: Center(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: _gamesHorizontalMargin,
-          ),
-          child: Column(
-            children: [
-              for (var i = 0; i < _gameAssets.length; i += 2)
-                Padding(
-                  padding: EdgeInsets.only(
-                    bottom: i + 2 < _gameAssets.length ? _gameButtonGap : 0,
+    return NotificationListener<ScrollNotification>(
+      onNotification: (notification) {
+        if (notification is ScrollStartNotification &&
+            notification.dragDetails != null) {
+          _pauseGamesAutoScrollForUserInteraction();
+        } else if (notification is ScrollUpdateNotification &&
+            notification.dragDetails != null) {
+          _pauseGamesAutoScrollForUserInteraction();
+        }
+        return false;
+      },
+      child: SingleChildScrollView(
+        controller: _gamesScrollController,
+        padding: const EdgeInsets.only(top: _gamesTopGlowPadding, bottom: 24),
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: _gamesHorizontalMargin),
+            child: Column(
+              children: [
+                for (var i = 0; i < _gameAssets.length; i += 2)
+                  Padding(
+                    padding: EdgeInsets.only(
+                      bottom: i + 2 < _gameAssets.length ? _gameButtonGap : 0,
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        _buildGameButton(
+                          context,
+                          _gameAssets[i].$1,
+                          _gameAssets[i].$2,
+                          i,
+                        ),
+                        SizedBox(width: gap),
+                        _buildGameButton(
+                          context,
+                          _gameAssets[i + 1].$1,
+                          _gameAssets[i + 1].$2,
+                          i + 1,
+                        ),
+                      ],
+                    ),
                   ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      _buildGameButton(
-                        context,
-                        _gameAssets[i].$1,
-                        _gameAssets[i].$2,
-                        i,
-                      ),
-                      SizedBox(width: gap),
-                      _buildGameButton(
-                        context,
-                        _gameAssets[i + 1].$1,
-                        _gameAssets[i + 1].$2,
-                        i + 1,
-                      ),
-                    ],
-                  ),
-                ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -623,7 +732,7 @@ class _HomeScreenState extends State<HomeScreen>
   Widget _buildTutorialFirstCard(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
     final cardLeft = _firstGameLeft(screenWidth);
-    final cardTop = _gamesTopOffset();
+    final cardTop = _gamesTopOffset() + _gamesTopGlowPadding;
     return Positioned(
       left: cardLeft,
       top: cardTop,
@@ -665,7 +774,8 @@ class _HomeScreenState extends State<HomeScreen>
 
   Widget _buildTutorialOverlay(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
-    final bubbleTop = _gamesTopOffset() + _gameButtonSize + 10;
+    final bubbleTop =
+        _gamesTopOffset() + _gamesTopGlowPadding + _gameButtonSize + 10;
     final bubbleLeft = (screenWidth - _tutorialBubbleWidth) / 2 - 36;
     return Positioned.fill(
       child: Stack(
@@ -726,6 +836,15 @@ class _HomeScreenState extends State<HomeScreen>
 
   @override
   Widget build(BuildContext context) {
+    final isCurrent = ModalRoute.of(context)?.isCurrent ?? false;
+    if (isCurrent && !_wasCurrentRoute) {
+      _wasCurrentRoute = true;
+      _scheduleIdleScrollAfterDelay();
+    } else if (!isCurrent) {
+      _wasCurrentRoute = false;
+      _idleScrollDelayTimer?.cancel();
+      _idleScrollDelayTimer = null;
+    }
     return Scaffold(
       body: Stack(
         fit: StackFit.expand,
@@ -778,7 +897,7 @@ class _HomeScreenState extends State<HomeScreen>
                   HapticFeedback.lightImpact();
                   _openShop(context);
                 },
-                child: _buildBalance(),
+                child: _buildBalance(context),
               ),
             ),
           ),

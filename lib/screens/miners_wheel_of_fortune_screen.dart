@@ -13,6 +13,7 @@ import 'package:gold_mine_trolls/screens/roulette_constants.dart';
 import 'package:gold_mine_trolls/screens/shop_screen.dart';
 import 'package:gold_mine_trolls/services/balance_service.dart';
 import 'package:gold_mine_trolls/widgets/pressable_button.dart';
+import 'package:gold_mine_trolls/widgets/warning_panel.dart';
 
 class MinersWheelOfFortuneScreen extends StatefulWidget {
   const MinersWheelOfFortuneScreen({super.key});
@@ -577,11 +578,11 @@ class _MinersWheelOfFortuneScreenState extends State<MinersWheelOfFortuneScreen>
     _adjustTimer?.cancel();
     _activeDelta = delta;
     _adjustWatch = Stopwatch()..start();
-    _adjustTimer = Timer.periodic(const Duration(milliseconds: 120), (_) {
+    _adjustTimer = Timer.periodic(const Duration(milliseconds: 40), (_) {
       final elapsed = _adjustWatch?.elapsedMilliseconds ?? 0;
-      var factor = 1;
-      if (elapsed >= 3000 && elapsed < 5000) factor = 4;
-      if (elapsed >= 5000) factor = 8;
+      var factor = 3;
+      if (elapsed >= 800 && elapsed < 2000) factor = 6;
+      if (elapsed >= 2000) factor = 12;
       _applyBetDelta(_activeDelta * _betStep * factor, haptic: false);
     });
   }
@@ -657,7 +658,13 @@ class _MinersWheelOfFortuneScreenState extends State<MinersWheelOfFortuneScreen>
     if (_isSpinning) return;
     if (_selectedZones.isEmpty) return;
     final totalBet = _bet * _selectedZones.length;
-    if (_bet <= 0 || _balance < totalBet) return;
+    if (_bet <= 0 || _balance < totalBet) {
+      showWarningSnackBar(
+        context,
+        'Not enough coins to start the game.',
+      );
+      return;
+    }
 
     final betToUse = _bet;
     final selectedSnapshot = Set<RouletteBetKey>.from(_selectedZones);

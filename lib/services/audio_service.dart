@@ -19,6 +19,8 @@ class AudioService {
       'assets/sounds/miners_wheel_of_fortune/gumball_machine.ogg';
   static const _drillingAsset =
       'assets/sounds/mine_depth_tower/drilling.wav';
+  static const _mineDepthTowerRoomDownAsset =
+      'assets/sounds/mine_depth_tower/room_down.wav';
   static const _loseAsset = 'assets/sounds/lose/lose.wav';
   static const _winAsset = 'assets/sounds/winning/win.wav';
   static const _cardDropAsset = 'assets/sounds/card_mine_21/card_drop.wav';
@@ -39,6 +41,7 @@ class AudioService {
   final AudioPlayer _clickPlayer = AudioPlayer();
   final AudioPlayer _sfxPlayer = AudioPlayer();
   final AudioPlayer _drillingPlayer = AudioPlayer();
+  final AudioPlayer _mineDepthTowerRoomDownPlayer = AudioPlayer();
   final AudioPlayer _cardDropPlayer = AudioPlayer();
   final AudioPlayer _losePlayer = AudioPlayer();
   final AudioPlayer _winPlayer = AudioPlayer();
@@ -53,6 +56,7 @@ class AudioService {
   bool _bgStarted = false;
   bool _cardDropLoaded = false;
   bool _drillingLoaded = false;
+  bool _mineDepthTowerRoomDownLoaded = false;
   bool _goldenAvalancheCoinLoaded = false;
   bool _treasureTrailLadderClaimLoaded = false;
   bool _cautiousMinerBoomLoaded = false;
@@ -86,6 +90,10 @@ class AudioService {
       if (!_drillingLoaded) {
         await _drillingPlayer.setAsset(_drillingAsset);
         _drillingLoaded = true;
+      }
+      if (!_mineDepthTowerRoomDownLoaded) {
+        await _mineDepthTowerRoomDownPlayer.setAsset(_mineDepthTowerRoomDownAsset);
+        _mineDepthTowerRoomDownLoaded = true;
       }
       if (!_goldenAvalancheCoinLoaded) {
         await _goldenAvalancheCoinPlayer.setAsset(_goldenAvalancheCoinAsset);
@@ -197,6 +205,7 @@ class AudioService {
       await _clickPlayer.stop();
       await _sfxPlayer.stop();
       await _drillingPlayer.stop();
+      await _mineDepthTowerRoomDownPlayer.stop();
       await _cardDropPlayer.stop();
       await _losePlayer.stop();
       await _winPlayer.stop();
@@ -229,7 +238,7 @@ class AudioService {
     } catch (_) {}
   }
 
-  /// Play Chief Trolls Wheel spin sound. Fades out over [durationMs].
+  /// Play Chief Trolls Wheel spin sound from the beginning.
   Future<void> playChiefTrollsWheelSpin(int durationMs) async {
     if (!SettingsService.soundEnabled) return;
     try {
@@ -238,17 +247,16 @@ class AudioService {
       await _sfxPlayer.setVolume(1.0);
       await _sfxPlayer.seek(Duration.zero);
       await _sfxPlayer.play();
-
-      final steps = 20;
-      final stepMs = durationMs ~/ steps;
-      for (var i = 1; i <= steps; i++) {
-        await Future<void>.delayed(Duration(milliseconds: stepMs));
-        final t = i / steps;
-        final vol = (1.0 - t).clamp(0.0, 1.0);
-        await _sfxPlayer.setVolume(vol);
-      }
-      await _sfxPlayer.stop();
       unawaited(_ensureBgSpeedCorrect());
+    } catch (_) {}
+  }
+
+  /// Stop and reset Chief Trolls Wheel spin sound.
+  Future<void> stopChiefTrollsWheelSpin() async {
+    try {
+      await _sfxPlayer.stop();
+      await _sfxPlayer.seek(Duration.zero);
+      await _sfxPlayer.setVolume(1.0);
     } catch (_) {}
   }
 
@@ -361,6 +369,22 @@ class AudioService {
     } catch (_) {}
   }
 
+  Future<void> playMineDepthTowerRoomDown() async {
+    if (!SettingsService.soundEnabled) return;
+    try {
+      if (!_mineDepthTowerRoomDownLoaded) {
+        await _mineDepthTowerRoomDownPlayer.setAsset(_mineDepthTowerRoomDownAsset);
+        _mineDepthTowerRoomDownLoaded = true;
+      }
+      await _mineDepthTowerRoomDownPlayer.stop();
+      await _mineDepthTowerRoomDownPlayer.setVolume(1.0);
+      await _mineDepthTowerRoomDownPlayer.setSpeed(1.0);
+      await _mineDepthTowerRoomDownPlayer.seek(Duration.zero);
+      await _mineDepthTowerRoomDownPlayer.play();
+      unawaited(_ensureBgSpeedCorrect());
+    } catch (_) {}
+  }
+
   StreamSubscription<PlayerState>? _loseCompleteSub;
 
   /// Play win sound. Call when player wins.
@@ -442,6 +466,7 @@ class AudioService {
     await _clickPlayer.dispose();
     await _sfxPlayer.dispose();
     await _drillingPlayer.dispose();
+    await _mineDepthTowerRoomDownPlayer.dispose();
     await _cardDropPlayer.dispose();
     await _losePlayer.dispose();
     await _winPlayer.dispose();

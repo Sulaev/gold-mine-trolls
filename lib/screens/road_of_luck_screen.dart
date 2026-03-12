@@ -31,6 +31,7 @@ class _RoadOfLuckScreenState extends State<RoadOfLuckScreen> {
   static const _bagBgWidth = 180.0;
   static const _bagBgHeight = 170.0;
   static const _gap = 12.0;
+  static const _gridBlockMaxWidth = 355.0;
   static const _closeBtnRightMargin = 16.0;
   static const _arrowWidth = 55.0;
   static const _arrowHeight = 25.0;
@@ -142,31 +143,30 @@ class _RoadOfLuckScreenState extends State<RoadOfLuckScreen> {
             top: _titleTop,
             left: 0,
             right: 0,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
+            child: Stack(
+              alignment: Alignment.center,
               children: [
-                Expanded(
-                  child: Center(
-                    child: SizedBox(
-                      width: _titleWidth,
-                      height: _titleHeight,
-                      child: Image.asset(
-                        'assets/images/road_of_luck/title.png',
-                        fit: BoxFit.contain,
-                        errorBuilder: (context, error, stackTrace) => const Text(
-                          'ROAD OF LUCK',
-                          style: TextStyle(
-                            color: Colors.amber,
-                            fontSize: 18,
-                            fontWeight: FontWeight.w900,
-                          ),
+                Center(
+                  child: SizedBox(
+                    width: _titleWidth,
+                    height: _titleHeight,
+                    child: Image.asset(
+                      'assets/images/road_of_luck/title.png',
+                      fit: BoxFit.contain,
+                      errorBuilder: (context, error, stackTrace) => const Text(
+                        'ROAD OF LUCK',
+                        style: TextStyle(
+                          color: Colors.amber,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w900,
                         ),
                       ),
                     ),
                   ),
                 ),
-                Padding(
-                  padding: const EdgeInsets.only(right: _closeBtnRightMargin),
+                Positioned(
+                  top: 0,
+                  right: _closeBtnRightMargin,
                   child: PressableButton(
                     onTap: () {
                       HapticFeedback.lightImpact();
@@ -200,9 +200,14 @@ class _RoadOfLuckScreenState extends State<RoadOfLuckScreen> {
             child: SingleChildScrollView(
               padding: EdgeInsets.zero,
               child: Center(
-                child: Stack(
-                  clipBehavior: Clip.none,
-                  children: [
+                child: SizedBox(
+                  width: _gridBlockMaxWidth,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.center,
+                    child: Stack(
+                      clipBehavior: Clip.none,
+                      children: [
                     Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -252,6 +257,8 @@ class _RoadOfLuckScreenState extends State<RoadOfLuckScreen> {
               ),
             ),
           ),
+          ),
+        ),
         ],
       ),
     );

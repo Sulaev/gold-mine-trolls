@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:gold_mine_trolls/models/blackjack_card.dart';
 import 'package:gold_mine_trolls/models/blackjack_game.dart';
 import 'package:gold_mine_trolls/screens/info_screen.dart';
+import 'package:gold_mine_trolls/screens/miners_pass_screen.dart';
 import 'package:gold_mine_trolls/screens/shop_screen.dart';
 import 'package:gold_mine_trolls/services/analytics_service.dart';
 import 'package:gold_mine_trolls/services/audio_service.dart';
@@ -13,6 +14,7 @@ import 'package:gold_mine_trolls/services/balance_service.dart';
 import 'package:gold_mine_trolls/services/card_mine_21_storage.dart';
 import 'package:gold_mine_trolls/widgets/pressable_button.dart';
 import 'package:gold_mine_trolls/widgets/tap_banner.dart';
+import 'package:gold_mine_trolls/widgets/warning_panel.dart';
 
 class CardMine21Screen extends StatefulWidget {
   const CardMine21Screen({super.key});
@@ -29,14 +31,19 @@ class _CardMine21ScreenState extends State<CardMine21Screen>
   static const _cardWidth = 99.0;
   static const _cardHeight = 129.0;
   static const _cardSpacing = 12.0;
-  static const _fixedBet = 10000;
-  static const _fixedWin = 30000;
+  static const _minBet = 50;
+  static const _baseBet = 10000;
+  static const _betStep = 50;
 
   int _balance = 0;
   int _displayBalance = 0;
   double _balanceAnimFrom = 0;
-  int _lastWin = 0;
+  int _bet = _baseBet;
   bool _loadingBalance = true;
+
+  Timer? _adjustTimer;
+  Stopwatch? _adjustWatch;
+  int _activeDelta = 0;
 
   late final AnimationController _balanceCountController;
   late final AnimationController _notificationController;
@@ -48,6 +55,7 @@ class _CardMine21ScreenState extends State<CardMine21Screen>
   bool _isWinOverlayVisible = false;
   bool _winOverlayShownForRound = false;
   bool _showResultOverlay = false;
+  bool _bootstrapped = false;
   static const _resultDelay = Duration(milliseconds: 1200);
   int _overlayTargetWin = 0;
   int _overlayAnimatedWin = 0;
@@ -81,7 +89,6 @@ class _CardMine21ScreenState extends State<CardMine21Screen>
       });
     BalanceService.balanceNotifier.addListener(_onBalanceNotifierChanged);
     _loadBalance();
-    _startGame();
   }
 
   void _onBalanceNotifierChanged() {
@@ -97,25 +104,38 @@ class _CardMine21ScreenState extends State<CardMine21Screen>
     }
   }
 
-  Future<void> _startGame() async {
-    await Future<void>.delayed(const Duration(milliseconds: 300));
-    if (!mounted) return;
-    if (_gameStarted) return;
-    final saved = await CardMine21Storage.loadGame();
-    if (saved != null) {
-      _restoreGame(saved);
-      return;
-    }
-    await _startRoundWithBet();
+  bool _isValidCardEntry(dynamic entry) {
+    return entry is Map && entry['suit'] is String && entry['rank'] is String;
   }
 
-  void _restoreGame(Map<String, dynamic> saved) {
-    if (!mounted) return;
+  bool _isValidCardList(dynamic value) {
+    return value is List && value.every(_isValidCardEntry);
+  }
+
+  bool _isRestorableSavedState(Map<String, dynamic> saved) {
+    final dealer = saved['dealerHand'];
+    final player = saved['playerHand'];
+    final deck = saved['deck'];
+    final phaseName = saved['phase'];
+    if (!_isValidCardList(dealer) ||
+        !_isValidCardList(player) ||
+        !_isValidCardList(deck)) {
+      return false;
+    }
+    if ((dealer as List).isEmpty || (player as List).isEmpty || (deck as List).isEmpty) {
+      return false;
+    }
+    if (phaseName is! String) return false;
+    if (!BlackjackPhase.values.any((p) => p.name == phaseName)) return false;
+    if (phaseName == BlackjackPhase.dealing.name) return false;
+    return true;
+  }
+
+  bool _restoreGame(Map<String, dynamic> saved) {
+    if (!mounted) return false;
     try {
-      final deck = saved['deck'] as List?;
-      if (deck == null || deck.isEmpty) {
-        unawaited(CardMine21Storage.clearGame());
-        return;
+      if (!_isRestorableSavedState(saved)) {
+        return false;
       }
       setState(() {
         _game.restoreState(saved);
@@ -128,9 +148,22 @@ class _CardMine21ScreenState extends State<CardMine21Screen>
       if (_game.phase == BlackjackPhase.dealerTurn && _game.dealerNeedsToDraw) {
         _dealerDrawLoop();
       }
+      return true;
     } catch (_) {
-      unawaited(CardMine21Storage.clearGame());
+      return false;
     }
+  }
+
+  Future<void> _bootstrapGameState() async {
+    if (!mounted || _bootstrapped || _loadingBalance) return;
+    _bootstrapped = true;
+    final saved = await CardMine21Storage.loadGame();
+    if (!mounted) return;
+    final restored = saved != null && _restoreGame(saved);
+    if (restored) return;
+    await CardMine21Storage.clearGame();
+    if (!mounted) return;
+    await _startRoundWithBet();
   }
 
   Future<void> _saveGameState() async {
@@ -143,6 +176,8 @@ class _CardMine21ScreenState extends State<CardMine21Screen>
   @override
   void dispose() {
     BalanceService.balanceNotifier.removeListener(_onBalanceNotifierChanged);
+    _adjustTimer?.cancel();
+    _adjustWatch?.stop();
     _balanceCountController.dispose();
     _notificationController.dispose();
     _winCountController.dispose();
@@ -151,17 +186,52 @@ class _CardMine21ScreenState extends State<CardMine21Screen>
 
   Future<void> _loadBalance() async {
     final value = await BalanceService.getBalance();
+    final savedBet = await BalanceService.getLastBet();
+    var restoredBet = savedBet ?? _baseBet;
+    if (value > 0) {
+      restoredBet = restoredBet.clamp(_minBet, value);
+    } else if (restoredBet < _minBet) {
+      restoredBet = _minBet;
+    }
     if (!mounted) return;
     setState(() {
       _balance = value;
       _displayBalance = value;
       _balanceAnimFrom = value.toDouble();
+      _bet = restoredBet;
       _loadingBalance = false;
     });
-    final saved = await CardMine21Storage.loadGame();
-    if (saved != null && !_gameStarted) {
-      _restoreGame(saved);
-    }
+    await _bootstrapGameState();
+  }
+
+  Future<void> _applyBetDelta(int delta, {bool haptic = true}) async {
+    if (_loadingBalance || _balance <= 0) return;
+    final next = (_bet + delta).clamp(_minBet, _balance);
+    if (next == _bet) return;
+    setState(() => _bet = next);
+    await BalanceService.setLastBet(_bet);
+    unawaited(AnalyticsService.reportBetChange(_gameName, _bet));
+    if (haptic) HapticFeedback.selectionClick();
+  }
+
+  void _startContinuousBetAdjust(int delta) {
+    _adjustTimer?.cancel();
+    _activeDelta = delta;
+    _adjustWatch = Stopwatch()..start();
+    _adjustTimer = Timer.periodic(const Duration(milliseconds: 40), (_) {
+      final elapsed = _adjustWatch?.elapsedMilliseconds ?? 0;
+      var factor = 3;
+      if (elapsed >= 800 && elapsed < 2000) factor = 6;
+      if (elapsed >= 2000) factor = 12;
+      unawaited(_applyBetDelta(_activeDelta * _betStep * factor, haptic: false));
+    });
+  }
+
+  void _stopContinuousBetAdjust() {
+    _adjustTimer?.cancel();
+    _adjustTimer = null;
+    _adjustWatch?.stop();
+    _adjustWatch = null;
   }
 
   void _animateBalanceChange({int durationMs = 520}) {
@@ -267,11 +337,31 @@ class _CardMine21ScreenState extends State<CardMine21Screen>
 
   Future<void> _startRoundWithBet() async {
     if (!mounted) return;
-    if (_balance < _fixedBet) return;
+    var roundBet = _bet;
+    if (_balance < roundBet) {
+      final normalized = (_balance ~/ _betStep) * _betStep;
+      if (normalized < _minBet) {
+        showWarningSnackBar(
+          context,
+          'Not enough coins to start the game.',
+        );
+        return;
+      }
+      roundBet = normalized;
+      setState(() => _bet = roundBet);
+      await BalanceService.setLastBet(roundBet);
+    }
+    if (_balance < roundBet) {
+      showWarningSnackBar(
+        context,
+        'Not enough coins to start the game.',
+      );
+      return;
+    }
 
     await CardMine21Storage.clearGame();
 
-    final nextBalance = _balance - _fixedBet;
+    final nextBalance = _balance - roundBet;
     setState(() {
       _balance = nextBalance;
       _game.startNewRound();
@@ -280,7 +370,6 @@ class _CardMine21ScreenState extends State<CardMine21Screen>
       _showResultOverlay = false;
       _notificationController.reset();
       _gameStarted = true;
-      _lastWin = 0;
       _handlePhaseChanged();
     });
     for (var i = 0; i < 4; i++) {
@@ -306,8 +395,7 @@ class _CardMine21ScreenState extends State<CardMine21Screen>
       unawaited(CardMine21Storage.clearGame());
     }
     if (_isWinState && !_winOverlayShownForRound) {
-      final winAmount = _fixedWin;
-      _lastWin = winAmount;
+      final winAmount = _bet * 3;
       _winOverlayShownForRound = true;
       unawaited(AnalyticsService.reportGameWin(_gameName));
       unawaited(AudioService.instance.playWin());
@@ -508,7 +596,15 @@ class _CardMine21ScreenState extends State<CardMine21Screen>
               height: 80 * scale,
               tapScale: 0.62,
               tapOffset: const Offset(0, 59),
-              onTap: () {},
+              onTap: () {
+                HapticFeedback.lightImpact();
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        const MinersPassScreen(source: 'card_mine_21'),
+                  ),
+                );
+              },
             ),
           ),
           SizedBox(width: 42 * scale),
@@ -685,32 +781,40 @@ class _CardMine21ScreenState extends State<CardMine21Screen>
     );
   }
 
-  double _cardLeft(int i, double cardW, double spacing) {
-    if (i < 2) return i * (cardW + spacing);
-    return 2 * (cardW + spacing) + (i - 2) * (cardW * 0.7);
+  double _handStep(int count, double cardW, double spacing) {
+    if (count <= 3) return cardW + spacing;
+    // 4+ cards: cascade with overlap.
+    return cardW * 0.68;
   }
 
   double _handWidth(int count, double cardW, double spacing) {
-    if (count <= 1) return cardW;
-    if (count == 2) return 2 * cardW + spacing;
-    return 2 * (cardW + spacing) + (count - 2) * (cardW * 0.7);
+    if (count <= 0) return cardW;
+    final step = _handStep(count, cardW, spacing);
+    return cardW + (count - 1) * step;
+  }
+
+  double _cardLeftInRow(
+    int i,
+    int count,
+    double cardW,
+    double spacing,
+    double rowWidth,
+  ) {
+    final handWidth = _handWidth(count, cardW, spacing);
+    final step = _handStep(count, cardW, spacing);
+    final startLeft = (rowWidth - handWidth) / 2;
+    return startLeft + i * step;
   }
 
   Widget _buildCardArea(double scale, double screenWidth) {
     final cardW = _cardWidth * scale;
     final cardH = _cardHeight * scale;
     final spacing = _cardSpacing * scale;
-    final dealerCountForWidth =
-        _game.dealerHand.length < 2 ? 2 : _game.dealerHand.length;
-    final playerCountForWidth =
-        _game.playerHand.length < 2 ? 2 : _game.playerHand.length;
-    final dealerHandWidth = _handWidth(dealerCountForWidth, cardW, spacing);
-    final playerHandWidth = _handWidth(playerCountForWidth, cardW, spacing);
-    final rowWidth =
-        dealerHandWidth > playerHandWidth ? dealerHandWidth : playerHandWidth;
+    final rowWidth = (screenWidth - 20 * scale).clamp(
+      2 * cardW + spacing,
+      screenWidth,
+    );
     final slotWidth = 2 * cardW + spacing;
-    final dealerCardsLeft = (rowWidth - dealerHandWidth) / 2;
-    final playerCardsLeft = (rowWidth - playerHandWidth) / 2;
     final dealerSlotsLeft = (rowWidth - slotWidth) / 2;
     final playerSlotsLeft = (rowWidth - slotWidth) / 2;
     final labelH = 34.0 * scale;
@@ -755,7 +859,13 @@ class _CardMine21ScreenState extends State<CardMine21Screen>
                 final card = _game.dealerHand[i];
                 final showFace = _dealerRevealed;
                 return Positioned(
-                  left: dealerCardsLeft + _cardLeft(i, cardW, spacing),
+                  left: _cardLeftInRow(
+                    i,
+                    _game.dealerHand.length,
+                    cardW,
+                    spacing,
+                    rowWidth,
+                  ),
                   top: 0,
                   child: _buildFlyingCard(
                     card: card,
@@ -808,7 +918,13 @@ class _CardMine21ScreenState extends State<CardMine21Screen>
               ...List.generate(_game.playerHand.length, (i) {
                 final card = _game.playerHand[i];
                 return Positioned(
-                  left: playerCardsLeft + _cardLeft(i, cardW, spacing),
+                  left: _cardLeftInRow(
+                    i,
+                    _game.playerHand.length,
+                    cardW,
+                    spacing,
+                    rowWidth,
+                  ),
                   top: 0,
                   child: _buildFlyingCard(
                     card: card,
@@ -828,81 +944,140 @@ class _CardMine21ScreenState extends State<CardMine21Screen>
     );
   }
 
-  Widget _buildYouWin(double scale) {
-    return SizedBox(
-      width: 260 * scale,
-      height: 91 * scale,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          Image.asset(
-            'assets/images/gold_vein/win_back.png',
-            fit: BoxFit.fill,
-            width: 260 * scale,
-            height: 91 * scale,
-          ),
-          Positioned(
-            top: 14 * scale,
-            child: Text(
-              'YOU WIN:',
-              style: GoogleFonts.montserrat(
-                color: Colors.white,
-                fontWeight: FontWeight.w900,
-                fontSize: 12.4 * scale,
+  Widget _buildBetControls(
+    double scale, {
+    bool enabled = true,
+    double opacity = 1,
+  }) {
+    return IgnorePointer(
+      ignoring: !enabled,
+      child: Opacity(
+        opacity: opacity,
+        child: SizedBox(
+          width: 161 * scale,
+          height: 58 * scale,
+          child: Container(
+            width: 161 * scale,
+            height: 57 * scale,
+            decoration: BoxDecoration(
+              color: const Color(0x66371810),
+              borderRadius: BorderRadius.circular(20 * scale),
+              border: Border.all(
+                color: const Color(0xFFFFEA4C),
+                width: 2 * scale,
               ),
             ),
-          ),
-          Positioned(
-            bottom: 26 * scale,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.center,
+            child: Stack(
+              clipBehavior: Clip.none,
+              alignment: Alignment.center,
               children: [
-                SizedBox(
-                  width: 24 * scale,
-                  height: 24 * scale,
-                  child: Image.asset(
-                    'assets/images/shop/coin_icon.png',
-                    fit: BoxFit.contain,
+                Positioned(
+                  left: -12 * scale,
+                  child: PressableButton(
+                    onTap: () => _applyBetDelta(-_betStep),
+                    onLongPressStart: (_) => _startContinuousBetAdjust(-1),
+                    onLongPressEnd: (_) => _stopContinuousBetAdjust(),
+                    onLongPressCancel: _stopContinuousBetAdjust,
+                    child: SizedBox(
+                      width: 29 * scale,
+                      height: 52 * scale,
+                      child: Image.asset(
+                        'assets/images/gold_vein/minus_btn.png',
+                        fit: BoxFit.fill,
+                      ),
+                    ),
                   ),
                 ),
-                SizedBox(width: 6 * scale),
-                _buildLastWinValue(
-                  _formatWinAmount(_lastWin),
-                  scale,
+                Positioned(
+                  right: -12 * scale,
+                  child: PressableButton(
+                    onTap: () => _applyBetDelta(_betStep),
+                    onLongPressStart: (_) => _startContinuousBetAdjust(1),
+                    onLongPressEnd: (_) => _stopContinuousBetAdjust(),
+                    onLongPressCancel: _stopContinuousBetAdjust,
+                    child: SizedBox(
+                      width: 29 * scale,
+                      height: 52 * scale,
+                      child: Image.asset(
+                        'assets/images/gold_vein/plus_btn.png',
+                        fit: BoxFit.fill,
+                      ),
+                    ),
+                  ),
+                ),
+                Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      'YOUR BET:',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontFamily: 'Montserrat',
+                        fontWeight: FontWeight.w900,
+                        fontSize: 10.5 * scale,
+                      ),
+                    ),
+                    SizedBox(height: 2 * scale),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        SizedBox(
+                          width: 24 * scale,
+                          height: 24 * scale,
+                          child: Image.asset(
+                            'assets/images/shop/coin_icon.png',
+                            fit: BoxFit.contain,
+                          ),
+                        ),
+                        SizedBox(width: 6 * scale),
+                        _buildOutlinedValue(
+                          _formatAmount(_bet),
+                          size: 19 * scale,
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ],
             ),
           ),
-        ],
+        ),
       ),
     );
   }
 
   Widget _buildBottomControls(double scale) {
     if (_isLoseState) {
-      final invisibleYouWin = SizedBox(
-        width: 260 * scale,
-        height: 91 * scale,
-      );
       if (_showResultOverlay) {
         return Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            invisibleYouWin,
+            SizedBox(
+              height: 91 * scale,
+              child: Center(
+                child: _buildBetControls(
+                  scale,
+                  enabled: false,
+                  opacity: 0,
+                ),
+              ),
+            ),
             SizedBox(width: 236 * scale, height: 52 * scale),
             SizedBox(height: 12 * scale),
-            PressableButton(
-              onTap: () async {
-                HapticFeedback.lightImpact();
-                await _newRound();
-              },
-              child: SizedBox(
-                width: 204 * scale,
-                height: 45 * scale,
-                child: Image.asset(
-                  'assets/images/card_mine_21/trayagain_btn.png',
-                  fit: BoxFit.fill,
+            Transform.translate(
+              offset: Offset(0, -25 * scale),
+              child: PressableButton(
+                onTap: () async {
+                  HapticFeedback.lightImpact();
+                  await _newRound();
+                },
+                child: SizedBox(
+                  width: 204 * scale,
+                  height: 45 * scale,
+                  child: Image.asset(
+                    'assets/images/card_mine_21/trayagain_btn.png',
+                    fit: BoxFit.fill,
+                  ),
                 ),
               ),
             ),
@@ -912,10 +1087,22 @@ class _CardMine21ScreenState extends State<CardMine21Screen>
       return Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          invisibleYouWin,
+          SizedBox(
+            height: 91 * scale,
+            child: Center(
+              child: _buildBetControls(
+                scale,
+                enabled: false,
+                opacity: 0,
+              ),
+            ),
+          ),
           SizedBox(width: 236 * scale, height: 52 * scale),
           SizedBox(height: 12 * scale),
-          SizedBox(width: 208 * scale, height: 45 * scale),
+          Transform.translate(
+            offset: Offset(0, -25 * scale),
+            child: SizedBox(width: 208 * scale, height: 45 * scale),
+          ),
         ],
       );
     }
@@ -924,8 +1111,7 @@ class _CardMine21ScreenState extends State<CardMine21Screen>
       return Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _buildYouWin(scale),
-          // Keep layout height identical to normal state so table does not jump.
+          SizedBox(height: 91 * scale, child: Center(child: _buildBetControls(scale))),
           SizedBox(
             width: 236 * scale,
             height: 52 * scale,
@@ -942,7 +1128,7 @@ class _CardMine21ScreenState extends State<CardMine21Screen>
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        _buildYouWin(scale),
+        SizedBox(height: 91 * scale, child: Center(child: _buildBetControls(scale))),
         PressableButton(
           onTap: _onHit,
           child: SizedBox(

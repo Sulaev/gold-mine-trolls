@@ -218,23 +218,22 @@ class _MinersPassScreenState extends State<MinersPassScreen> {
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(24, 44, 24, 16),
-              child: Column(
-                children: [
-                  SizedBox(
-                    width: _titleWidth,
-                    height: _titleHeight,
-                    child: Image.asset(
-                      'assets/images/paywall/title.png',
-                      fit: BoxFit.contain,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(
+                      width: _titleWidth,
+                      height: _titleHeight,
+                      child: Image.asset(
+                        'assets/images/paywall/title.png',
+                        fit: BoxFit.contain,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 2),
-                  _buildOfferTitle('assets/images/paywall/ex_title1.png'),
-                  const SizedBox(height: 4),
-                  _buildOfferTitle('assets/images/paywall/ex_title2.png'),
-                  const SizedBox(height: 4),
-                  _buildOfferTitle('assets/images/paywall/ex_title3.png'),
-                  const SizedBox(height: 10),
+                    _buildOfferTitle('assets/images/paywall/ex_title1.png'),
+                    _buildOfferTitle('assets/images/paywall/ex_title2.png'),
+                    _buildOfferTitle('assets/images/paywall/ex_title3.png'),
+                    const SizedBox(height: 10),
                   _buildBuyButton(
                     assetPath: 'assets/images/paywall/buy_btn_green.png',
                     width: 200,
@@ -270,14 +269,17 @@ class _MinersPassScreenState extends State<MinersPassScreen> {
                   _buildFooterCopy(),
                   const SizedBox(height: 10),
                   _buildRestorePurchases(),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
           Positioned(
             top: _headerTop,
             left: _closeBtnLeftMargin,
-            child: PressableButton(
+            child: Material(
+              type: MaterialType.transparency,
+              child: PressableButton(
               onTap: () {
                 HapticFeedback.lightImpact();
                 Navigator.of(context).pop();
@@ -290,6 +292,7 @@ class _MinersPassScreenState extends State<MinersPassScreen> {
                   fit: BoxFit.contain,
                 ),
               ),
+            ),
             ),
           ),
         ],

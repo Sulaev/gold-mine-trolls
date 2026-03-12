@@ -5,6 +5,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:gold_mine_trolls/screens/miners_pass_screen.dart';
 import 'package:gold_mine_trolls/screens/shop_screen.dart';
 import 'package:gold_mine_trolls/services/analytics_service.dart';
 import 'package:gold_mine_trolls/services/audio_service.dart';
@@ -13,6 +14,7 @@ import 'package:gold_mine_trolls/screens/info_screen.dart';
 import 'package:gold_mine_trolls/widgets/gold_vein_info_content.dart';
 import 'package:gold_mine_trolls/widgets/pressable_button.dart';
 import 'package:gold_mine_trolls/widgets/tap_banner.dart';
+import 'package:gold_mine_trolls/widgets/warning_panel.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 enum _WinBannerType { win, bigWin, jackpots }
@@ -40,8 +42,8 @@ class _GoldVeinScreenState extends State<GoldVeinScreen>
   static const _slotColGap = 20.0;
   static const _slotCellWidth = 78.0;
   static const _slotCellHeight = 70.0;
-  static const _slotSymbolWidth = 75.0;
-  static const _slotSymbolHeight = 60.0;
+  static const _slotSymbolWidth = 60.0;
+  static const _slotSymbolHeight = 48.0;
   static const _slotGridTop = 35.0;
   static const _slotGridOffsetX = -24.0;
   static const _slotGridOffsetY = 10.0;
@@ -92,6 +94,7 @@ class _GoldVeinScreenState extends State<GoldVeinScreen>
   );
 
   final List<int> _reelTicks = [0, 0, 0];
+  final List<double> _reelProgress = [0, 0, 0];
   final Set<String> _highlightedCells = <String>{};
 
   // 5 paylines for 3x5 view: top, middle, bottom, and 2 diagonals.
@@ -440,7 +443,10 @@ class _GoldVeinScreenState extends State<GoldVeinScreen>
     if (_isSpinning) return;
     if (_bet <= 0) return;
     if (_balance < _bet) {
-      _showCenterResult('NOT ENOUGH GOLD', isWin: false);
+      showWarningSnackBar(
+        context,
+        'Not enough coins to start the game.',
+      );
       setState(() => _autoSpin = false);
       return;
     }
@@ -451,18 +457,22 @@ class _GoldVeinScreenState extends State<GoldVeinScreen>
       _isSpinning = true;
       _highlightedCells.clear();
       _balance = afterBetBalance;
+      _reelProgress
+        ..[0] = 0
+        ..[1] = 0
+        ..[2] = 0;
     });
     _animateBalanceChange(durationMs: 420);
     await BalanceService.setBalance(_balance);
 
     final target = _generateSpinResult();
 
-    unawaited(AudioService.instance.playRouletteSpin(2500));
+    unawaited(AudioService.instance.playRouletteSpin(3800));
 
     await Future.wait([
-      _spinReel(0, target, 1050),
-      _spinReel(1, target, 1600),
-      _spinReel(2, target, 2250),
+      _spinReel(0, target, _spinDurationForReel(0)),
+      _spinReel(1, target, _spinDurationForReel(1)),
+      _spinReel(2, target, _spinDurationForReel(2)),
     ]);
 
     if (!mounted) return;
@@ -479,6 +489,10 @@ class _GoldVeinScreenState extends State<GoldVeinScreen>
         ..addAll(winCells);
       _lastWin = win;
       _isSpinning = false;
+      _reelProgress
+        ..[0] = 1
+        ..[1] = 1
+        ..[2] = 1;
     });
 
     if (win > 0) {
@@ -511,13 +525,63 @@ class _GoldVeinScreenState extends State<GoldVeinScreen>
     }
   }
 
+  int _spinDurationForReel(int reel) {
+    switch (reel) {
+      case 0:
+        return 980;
+      case 1:
+        return 2500;
+      case 2:
+        return 1650;
+      default:
+        return 1500;
+    }
+  }
+
+  ({int minStepMs, int maxStepMs, Curve curve, int settleBaseMs, int settleStepMs})
+  _spinProfileForReel(int reel) {
+    switch (reel) {
+      case 0:
+        return (
+          minStepMs: 18,
+          maxStepMs: 82,
+          curve: Curves.easeOutCubic,
+          settleBaseMs: 58,
+          settleStepMs: 16,
+        );
+      case 1:
+        return (
+          minStepMs: 24,
+          maxStepMs: 128,
+          curve: Curves.easeOutQuart,
+          settleBaseMs: 84,
+          settleStepMs: 26,
+        );
+      case 2:
+        return (
+          minStepMs: 20,
+          maxStepMs: 104,
+          curve: Curves.easeOutQuad,
+          settleBaseMs: 68,
+          settleStepMs: 20,
+        );
+      default:
+        return (
+          minStepMs: 20,
+          maxStepMs: 100,
+          curve: Curves.easeOutCubic,
+          settleBaseMs: 64,
+          settleStepMs: 18,
+        );
+    }
+  }
+
   Future<void> _spinReel(
     int reel,
     List<List<int>> target,
     int durationMs,
   ) async {
-    const minStepMs = 30;
-    const maxStepMs = 165;
+    final profile = _spinProfileForReel(reel);
 
     final started = DateTime.now();
     while (true) {
@@ -526,26 +590,38 @@ class _GoldVeinScreenState extends State<GoldVeinScreen>
       if (!mounted) return;
 
       final progress = (elapsedMs / durationMs).clamp(0.0, 1.0);
-      final eased = Curves.easeOutQuart.transform(progress);
-      final stepMs = (minStepMs + (maxStepMs - minStepMs) * eased).round();
+      final eased = profile.curve.transform(progress);
+      final stepMs =
+          (profile.minStepMs +
+                  (profile.maxStepMs - profile.minStepMs) * eased)
+              .round();
+      final topSymbol = _weightedRandomSymbol();
 
       setState(() {
-        _shiftReelDown(reel, topSymbol: _weightedRandomSymbol());
+        _shiftReelDown(reel, topSymbol: topSymbol);
         _reelTicks[reel]++;
+        _reelProgress[reel] = progress;
       });
       await Future.delayed(Duration(milliseconds: stepMs));
     }
 
-    // Deterministic landing: push exact target symbols from top so reel settles
-    // without jitter or random flicker near the stop.
     for (var settleStep = 0; settleStep < _rows; settleStep++) {
       if (!mounted) return;
       setState(() {
         final topSymbol = target[_rows - 1 - settleStep][reel];
         _shiftReelDown(reel, topSymbol: topSymbol);
         _reelTicks[reel]++;
+        _reelProgress[reel] = 0.90 + ((settleStep + 1) / _rows) * 0.10;
       });
-      await Future.delayed(Duration(milliseconds: 72 + settleStep * 18));
+      await Future.delayed(
+        Duration(
+          milliseconds: profile.settleBaseMs +
+              settleStep * profile.settleStepMs,
+        ),
+      );
+    }
+    if (mounted) {
+      setState(() => _reelProgress[reel] = 1);
     }
     _reelBounceControllers[reel].forward(from: 0);
   }
@@ -644,9 +720,6 @@ class _GoldVeinScreenState extends State<GoldVeinScreen>
     setState(() => _bet = next);
     unawaited(BalanceService.setLastBet(_bet));
     unawaited(AnalyticsService.reportBetChange(_gameName, _bet));
-    if (_tutorialStateLoaded && _tutorialStep == 2) {
-      unawaited(_completeTutorialStepTwo());
-    }
     if (haptic) HapticFeedback.selectionClick();
   }
 
@@ -654,11 +727,11 @@ class _GoldVeinScreenState extends State<GoldVeinScreen>
     _stopContinuousBetAdjust();
     _activeDelta = delta;
     _adjustWatch = Stopwatch()..start();
-    _adjustTimer = Timer.periodic(const Duration(milliseconds: 120), (_) {
+    _adjustTimer = Timer.periodic(const Duration(milliseconds: 40), (_) {
       final elapsed = _adjustWatch?.elapsedMilliseconds ?? 0;
-      var factor = 1;
-      if (elapsed >= 3000 && elapsed < 5000) factor = 4;
-      if (elapsed >= 5000) factor = 8;
+      var factor = 3;
+      if (elapsed >= 800 && elapsed < 2000) factor = 6;
+      if (elapsed >= 2000) factor = 12;
       _applyBetDelta(_activeDelta * _betStep * factor, haptic: false);
     });
   }
@@ -676,9 +749,6 @@ class _GoldVeinScreenState extends State<GoldVeinScreen>
     setState(() => _bet = _balance);
     unawaited(BalanceService.setLastBet(_bet));
     unawaited(AnalyticsService.reportBetChange(_gameName, _bet));
-    if (_tutorialStateLoaded && _tutorialStep == 2) {
-      unawaited(_completeTutorialStepTwo());
-    }
     HapticFeedback.lightImpact();
   }
 
@@ -779,6 +849,7 @@ class _GoldVeinScreenState extends State<GoldVeinScreen>
     final isHighlighted = _highlightedCells.contains('$row-$col');
     final bounce = _reelBounceControllers[col];
     final symbolOffset = _symbolPositionOffset(row, col);
+    final blurSigma = _reelSpinBlurSigma(col);
     return AnimatedBuilder(
       animation: bounce,
       builder: (context, child) {
@@ -795,48 +866,45 @@ class _GoldVeinScreenState extends State<GoldVeinScreen>
               alignment: Alignment.center,
               children: [
                 AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 130),
-                  switchInCurve: Curves.easeOutQuart,
-                  switchOutCurve: Curves.easeInQuart,
+                  duration: const Duration(milliseconds: 80),
+                  switchInCurve: Curves.easeOutCubic,
+                  switchOutCurve: Curves.easeInCubic,
                   layoutBuilder: (currentChild, previousChildren) {
-                    // Keep only the active frame to avoid visible layering artifacts
-                    // while we imitate reel masking.
                     return currentChild ?? const SizedBox.shrink();
                   },
                   transitionBuilder: (child, animation) {
-                    final isIncoming = child.key == currentSymbolKey;
-                    if (isIncoming) {
-                      final inPosition =
-                          Tween<Offset>(
-                            begin: const Offset(0, -0.34),
-                            end: Offset.zero,
-                          ).animate(
-                            CurvedAnimation(
-                              parent: animation,
-                              curve: Curves.easeOutQuart,
-                            ),
-                          );
-                      return SlideTransition(
-                        position: inPosition,
-                        child: child,
-                      );
-                    }
-                    // Outgoing frame stays hidden to prevent desync/overlay flicker.
-                    return const SizedBox.shrink();
+                    return SlideTransition(
+                      position: Tween<Offset>(
+                        begin: const Offset(0, -0.08),
+                        end: Offset.zero,
+                      ).animate(CurvedAnimation(
+                        parent: animation,
+                        curve: Curves.easeOutCubic,
+                      )),
+                      child: child,
+                    );
                   },
                   child: Transform.translate(
                     key: currentSymbolKey,
                     offset: symbolOffset,
-                    child: Image.asset(
-                      symbol,
-                      fit: BoxFit.contain,
-                      width: symbolW,
-                      height: symbolH,
-                      alignment: Alignment.center,
-                      errorBuilder: (context, error, stackTrace) => Icon(
-                        Icons.casino,
-                        size: cellH * 0.42,
-                        color: Colors.amber.shade700,
+                    child: ClipRect(
+                      child: ImageFiltered(
+                        imageFilter: ui.ImageFilter.blur(
+                          sigmaX: 0,
+                          sigmaY: blurSigma,
+                        ),
+                        child: Image.asset(
+                          symbol,
+                          fit: BoxFit.contain,
+                          width: symbolW,
+                          height: symbolH,
+                          alignment: Alignment.center,
+                          errorBuilder: (context, error, stackTrace) => Icon(
+                            Icons.casino,
+                            size: cellH * 0.42,
+                            color: Colors.amber.shade700,
+                          ),
+                        ),
                       ),
                     ),
                   ),
@@ -866,6 +934,22 @@ class _GoldVeinScreenState extends State<GoldVeinScreen>
         );
       },
     );
+  }
+
+  double _reelSpinBlurSigma(int col) {
+    if (!_isSpinning) return 0;
+    final progress = _reelProgress[col].clamp(0.0, 1.0);
+    double intensity;
+    if (progress <= 0.45) {
+      // Softer start: blur grows more gradually so symbols remain visible.
+      final t = (progress / 0.45).clamp(0.0, 1.0);
+      intensity = Curves.easeInOutCubic.transform(t);
+    } else {
+      // Fade blur out smoothly toward the stop.
+      final t = ((progress - 0.45) / 0.55).clamp(0.0, 1.0);
+      intensity = 1 - Curves.easeInCubic.transform(t);
+    }
+    return (0.12 + intensity * 3.1).clamp(0.0, 3.4);
   }
 
   Offset _symbolPositionOffset(int row, int col) {
@@ -1296,7 +1380,15 @@ class _GoldVeinScreenState extends State<GoldVeinScreen>
           Positioned(
             left: 37 * scale,
             bottom: 42 * scale,
-            child: _buildTutorialBetControls(scale),
+            child: GestureDetector(
+              onTap: () {
+                if (_tutorialStateLoaded && _tutorialStep == 2) {
+                  unawaited(_completeTutorialStepTwo());
+                }
+              },
+              behavior: HitTestBehavior.opaque,
+              child: _buildTutorialBetControls(scale),
+            ),
           ),
           Positioned(
             left: 186 * scale,
@@ -1313,6 +1405,7 @@ class _GoldVeinScreenState extends State<GoldVeinScreen>
       await _completeTutorialStepThree();
       if (!mounted) return;
     }
+    if (_isSpinning) return;
     await _startSpin();
   }
 
@@ -1409,125 +1502,7 @@ class _GoldVeinScreenState extends State<GoldVeinScreen>
                   padding: EdgeInsets.only(bottom: 16 * scale),
                   child: Column(
                     children: [
-                      SizedBox(height: 8 * scale),
-                      Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 12 * scale),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            PressableButton(
-                              onTap: () {
-                                HapticFeedback.lightImpact();
-                                Navigator.of(context).pop();
-                              },
-                              child: SizedBox(
-                                width: 38 * scale,
-                                height: 38 * scale,
-                                child: Image.asset(
-                                  'assets/images/gold_vein/back_btn.png',
-                                  fit: BoxFit.contain,
-                                ),
-                              ),
-                            ),
-                            SizedBox(width: 42 * scale),
-                            SizedBox(
-                              width: 154 * scale,
-                              height: 80 * scale,
-                              child: TapBanner(
-                                bannerAsset:
-                                    'assets/images/shop/banner_miner_pass.png',
-                                width: 154 * scale,
-                                height: 80 * scale,
-                                tapScale: 0.62,
-                                tapOffset: const Offset(0, 59),
-                                onTap: () {
-                                  HapticFeedback.lightImpact();
-                                },
-                              ),
-                            ),
-                            SizedBox(width: 42 * scale),
-                            PressableButton(
-                              onTap: _openInfoDialog,
-                              child: SizedBox(
-                                width: 38 * scale,
-                                height: 38 * scale,
-                                child: Image.asset(
-                                  'assets/images/gold_vein/info_btn.png',
-                                  fit: BoxFit.contain,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      SizedBox(height: 8 * scale),
-                      Transform.translate(
-                        offset: Offset(0, -10 * scale),
-                        child: PressableButton(
-                          onTap: _openShop,
-                          child: SizedBox(
-                            width: 242 * scale,
-                            height: 85 * scale,
-                            child: Stack(
-                              clipBehavior: Clip.none,
-                              alignment: Alignment.center,
-                              children: [
-                                Image.asset(
-                                  'assets/images/gold_vein/coin_back2.png',
-                                  fit: BoxFit.fill,
-                                  width: 242 * scale,
-                                  height: 85 * scale,
-                                  errorBuilder: (context, error, stackTrace) =>
-                                      Container(
-                                        color: const Color(0x8850271C),
-                                        width: 242 * scale,
-                                        height: 85 * scale,
-                                      ),
-                                ),
-                                Padding(
-                                  padding: EdgeInsets.only(top: 2 * scale),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      SizedBox(
-                                        width: 22 * scale,
-                                        height: 22 * scale,
-                                        child: Image.asset(
-                                          'assets/images/main_screen/coin_icon.png',
-                                          fit: BoxFit.contain,
-                                        ),
-                                      ),
-                                      SizedBox(width: 6 * scale),
-                                      _buildOutlinedValue(
-                                        _loadingBalance
-                                            ? '...'
-                                            : _formatAmount(_displayBalance),
-                                        size: 21.34 * scale,
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                Positioned(
-                                  bottom: -13 * scale,
-                                  child: PressableButton(
-                                    onTap: _openShop,
-                                    child: SizedBox(
-                                      width: 48 * scale,
-                                      height: 48 * scale,
-                                      child: Image.asset(
-                                        'assets/images/main_screen/add_btn.png',
-                                        fit: BoxFit.contain,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                      SizedBox(height: 6 * scale),
+                      SizedBox(height: 200 * scale),
                       Transform.translate(
                         offset: Offset(0, -50 * scale),
                         child: Stack(
@@ -1759,12 +1734,14 @@ class _GoldVeinScreenState extends State<GoldVeinScreen>
                                       width: 103 * scale,
                                       height: 93 * scale,
                                     )
-                                  : Column(
-                                      children: [
-                                        Transform.translate(
-                                          offset: Offset(0, 5 * scale),
-                                          child: PressableButton(
-                                            onTap: _toggleAutoSpin,
+                                  : Transform.translate(
+                                      offset: Offset(0, 14 * scale),
+                                      child: Column(
+                                        children: [
+                                          Transform.translate(
+                                            offset: Offset(0, 5 * scale),
+                                            child: PressableButton(
+                                              onTap: _toggleAutoSpin,
                                             child: SizedBox(
                                               width: 69 * scale,
                                               height: 27 * scale,
@@ -1808,10 +1785,149 @@ class _GoldVeinScreenState extends State<GoldVeinScreen>
                                         ),
                                       ],
                                     ),
+                                    ),
                             ],
                           ),
                         ),
                       ),
+                    ],
+                  ),
+                ),
+              ),
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: SafeArea(
+                  bottom: false,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      SizedBox(height: 8 * scale),
+                      Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 12 * scale),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            PressableButton(
+                              onTap: () {
+                                HapticFeedback.lightImpact();
+                                Navigator.of(context).pop();
+                              },
+                              child: SizedBox(
+                                width: 38 * scale,
+                                height: 38 * scale,
+                                child: Image.asset(
+                                  'assets/images/gold_vein/back_btn.png',
+                                  fit: BoxFit.contain,
+                                ),
+                              ),
+                            ),
+                            SizedBox(width: 42 * scale),
+                            SizedBox(
+                              width: 154 * scale,
+                              height: 80 * scale,
+                              child: TapBanner(
+                                bannerAsset:
+                                    'assets/images/shop/banner_miner_pass.png',
+                                width: 154 * scale,
+                                height: 80 * scale,
+                                tapScale: 0.62,
+                                tapOffset: const Offset(0, 59),
+                                onTap: () {
+                                  HapticFeedback.lightImpact();
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (_) =>
+                                          const MinersPassScreen(source: 'gold_vein'),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                            SizedBox(width: 42 * scale),
+                            PressableButton(
+                              onTap: _openInfoDialog,
+                              child: SizedBox(
+                                width: 38 * scale,
+                                height: 38 * scale,
+                                child: Image.asset(
+                                  'assets/images/gold_vein/info_btn.png',
+                                  fit: BoxFit.contain,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      SizedBox(height: 8 * scale),
+                      Transform.translate(
+                        offset: Offset(0, -10 * scale),
+                        child: PressableButton(
+                          onTap: _openShop,
+                          child: SizedBox(
+                            width: 242 * scale,
+                            height: 85 * scale,
+                            child: Stack(
+                              clipBehavior: Clip.none,
+                              alignment: Alignment.center,
+                              children: [
+                                Image.asset(
+                                  'assets/images/gold_vein/coin_back2.png',
+                                  fit: BoxFit.fill,
+                                  width: 242 * scale,
+                                  height: 85 * scale,
+                                  errorBuilder: (context, error, stackTrace) =>
+                                      Container(
+                                        color: const Color(0x8850271C),
+                                        width: 242 * scale,
+                                        height: 85 * scale,
+                                      ),
+                                ),
+                                Padding(
+                                  padding: EdgeInsets.only(top: 2 * scale),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      SizedBox(
+                                        width: 22 * scale,
+                                        height: 22 * scale,
+                                        child: Image.asset(
+                                          'assets/images/main_screen/coin_icon.png',
+                                          fit: BoxFit.contain,
+                                        ),
+                                      ),
+                                      SizedBox(width: 6 * scale),
+                                      _buildOutlinedValue(
+                                        _loadingBalance
+                                            ? '...'
+                                            : _formatAmount(_displayBalance),
+                                        size: 21.34 * scale,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                Positioned(
+                                  bottom: -13 * scale,
+                                  child: PressableButton(
+                                    onTap: _openShop,
+                                    child: SizedBox(
+                                      width: 48 * scale,
+                                      height: 48 * scale,
+                                      child: Image.asset(
+                                        'assets/images/main_screen/add_btn.png',
+                                        fit: BoxFit.contain,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      SizedBox(height: 6 * scale),
                     ],
                   ),
                 ),

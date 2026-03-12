@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'screens/onboarding_screen.dart';
+import 'screens/launch_screen.dart';
 import 'services/analytics_service.dart';
 import 'services/audio_service.dart';
 import 'services/balance_service.dart';
@@ -60,9 +60,15 @@ class _GoldMineTrollsAppState extends State<GoldMineTrollsApp>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       AudioService.instance.onAppResumed();
+      AudioService.instance.startBgMusic();
     } else if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive ||
         state == AppLifecycleState.detached) {
-      AnalyticsService.reportAppClose();
+      AudioService.instance.stopBgMusic();
+      if (state == AppLifecycleState.paused ||
+          state == AppLifecycleState.detached) {
+        AnalyticsService.reportAppClose();
+      }
     }
   }
 
@@ -75,7 +81,7 @@ class _GoldMineTrollsAppState extends State<GoldMineTrollsApp>
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.amber),
         useMaterial3: true,
       ),
-      home: const OnboardingScreen(),
+      home: const LaunchScreen(),
     );
   }
 }

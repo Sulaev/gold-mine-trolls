@@ -4,19 +4,9 @@ class DailyBonusService {
   DailyBonusService._();
 
   static const _lastClaimDateKey = 'daily_bonus_last_claim_date';
-  static const _nextBonusIndexKey = 'daily_bonus_next_bonus_index';
-  static const List<int> _cycle = [
-    10000,
-    1000,
-    2000,
-    3000,
-    4000,
-    5000,
-    6000,
-    7000,
-    8000,
-    9000,
-  ];
+  static const _hasClaimedWelcomeBonusKey = 'daily_bonus_has_claimed_welcome';
+  static const _welcomeBonusAmount = 10000;
+  static const _dailyBonusAmount = 1000;
 
   static String _dateKey(DateTime date) {
     final y = date.year.toString().padLeft(4, '0');
@@ -33,8 +23,8 @@ class DailyBonusService {
 
   static Future<int> getTodayBonusAmount() async {
     final prefs = await SharedPreferences.getInstance();
-    final index = (prefs.getInt(_nextBonusIndexKey) ?? 0) % _cycle.length;
-    return _cycle[index];
+    final hasClaimedWelcome = prefs.getBool(_hasClaimedWelcomeBonusKey) ?? false;
+    return hasClaimedWelcome ? _dailyBonusAmount : _welcomeBonusAmount;
   }
 
   static Future<int?> claimTodayBonus() async {
@@ -42,11 +32,11 @@ class DailyBonusService {
     final today = _dateKey(DateTime.now());
     if (prefs.getString(_lastClaimDateKey) == today) return null;
 
-    final index = (prefs.getInt(_nextBonusIndexKey) ?? 0) % _cycle.length;
-    final amount = _cycle[index];
+    final hasClaimedWelcome = prefs.getBool(_hasClaimedWelcomeBonusKey) ?? false;
+    final amount = hasClaimedWelcome ? _dailyBonusAmount : _welcomeBonusAmount;
 
     await prefs.setString(_lastClaimDateKey, today);
-    await prefs.setInt(_nextBonusIndexKey, (index + 1) % _cycle.length);
+    await prefs.setBool(_hasClaimedWelcomeBonusKey, true);
     return amount;
   }
 }

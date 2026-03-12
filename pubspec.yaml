@@ -39,6 +39,9 @@ dependencies:
   just_audio: ^0.9.40
   appmetrica_plugin: ^3.4.0
 
+dependency_overrides:
+  shared_preferences_android: 2.4.12
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -69,6 +72,7 @@ flutter:
     - assets/images/gold_vein/slots/
     - assets/images/miners_wheel_of_fortune/
     - assets/images/mine_depth_tower/
+    - assets/images/mine_depth_tower/rooms/
     - assets/images/golden_avalanche/
     - assets/images/treasure_trail_ladder/
     - assets/images/chief_trolls_wheel/

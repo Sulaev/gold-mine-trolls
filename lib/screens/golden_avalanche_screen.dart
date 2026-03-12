@@ -4,12 +4,14 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
+import 'package:gold_mine_trolls/screens/miners_pass_screen.dart';
 import 'package:gold_mine_trolls/screens/shop_screen.dart';
 import 'package:gold_mine_trolls/services/analytics_service.dart';
 import 'package:gold_mine_trolls/services/audio_service.dart';
 import 'package:gold_mine_trolls/services/balance_service.dart';
 import 'package:gold_mine_trolls/widgets/pressable_button.dart';
 import 'package:gold_mine_trolls/widgets/tap_banner.dart';
+import 'package:gold_mine_trolls/widgets/warning_panel.dart';
 
 enum _CoeffMode { low, normal, high }
 
@@ -65,6 +67,10 @@ class _GoldenAvalancheScreenState extends State<GoldenAvalancheScreen>
   bool _autoDrop = false;
   Timer? _autoDropTimer;
 
+  Timer? _adjustTimer;
+  Stopwatch? _adjustWatch;
+  int _activeDelta = 0;
+
   @override
   void initState() {
     super.initState();
@@ -101,6 +107,8 @@ class _GoldenAvalancheScreenState extends State<GoldenAvalancheScreen>
   void dispose() {
     BalanceService.balanceNotifier.removeListener(_onBalanceNotifierChanged);
     _autoDropTimer?.cancel();
+    _adjustTimer?.cancel();
+    _adjustWatch?.stop();
     _physicsTicker?.dispose();
     _balanceCountController.dispose();
     super.dispose();
@@ -230,6 +238,7 @@ class _GoldenAvalancheScreenState extends State<GoldenAvalancheScreen>
     const dt = 1 / 60.0;
     const gravity = 420.0;
     const bounceDamping = 0.65;
+    const wallBounceDamping = 0.55;
     const ballRadius = _ballSize / 2;
     const pegRadius = _pegSize / 2;
 
@@ -252,6 +261,21 @@ class _GoldenAvalancheScreenState extends State<GoldenAvalancheScreen>
       ball.vy += gravity * dt;
       ball.x += ball.vx * dt;
       ball.y += ball.vy * dt;
+
+      // Keep balls inside board bounds so they never fly off-screen.
+      final minX = ballR;
+      final maxX = boardWidth - ballR;
+      if (ball.x < minX) {
+        ball.x = minX;
+        if (ball.vx < 0) {
+          ball.vx = -ball.vx * wallBounceDamping;
+        }
+      } else if (ball.x > maxX) {
+        ball.x = maxX;
+        if (ball.vx > 0) {
+          ball.vx = -ball.vx * wallBounceDamping;
+        }
+      }
 
       for (var iter = 0; iter < 3; iter++) {
         for (final peg in pegPositions) {
@@ -350,7 +374,15 @@ class _GoldenAvalancheScreenState extends State<GoldenAvalancheScreen>
   }
 
   Future<void> _onDrop() async {
-    if (_loadingBalance || _balance < _bet) return;
+    if (_loadingBalance || _balance < _bet) {
+      if (!_loadingBalance) {
+        showWarningSnackBar(
+          context,
+          'Not enough coins to start the game.',
+        );
+      }
+      return;
+    }
     HapticFeedback.lightImpact();
 
     final newBalance = _balance - _bet;
@@ -375,14 +407,34 @@ class _GoldenAvalancheScreenState extends State<GoldenAvalancheScreen>
     _startPhysicsTicker(_plinkoScale);
   }
 
-  Future<void> _applyBetDelta(int delta) async {
+  Future<void> _applyBetDelta(int delta, {bool haptic = true}) async {
     if (_loadingBalance || _balance <= 0) return;
     final next = (_bet + delta).clamp(_minBet, _balance);
     if (next == _bet) return;
     setState(() => _bet = next);
     await BalanceService.setLastBet(_bet);
     unawaited(AnalyticsService.reportBetChange(_gameName, _bet));
-    HapticFeedback.selectionClick();
+    if (haptic) HapticFeedback.selectionClick();
+  }
+
+  void _startContinuousBetAdjust(int delta) {
+    _adjustTimer?.cancel();
+    _activeDelta = delta;
+    _adjustWatch = Stopwatch()..start();
+    _adjustTimer = Timer.periodic(const Duration(milliseconds: 40), (_) {
+      final elapsed = _adjustWatch?.elapsedMilliseconds ?? 0;
+      var factor = 3;
+      if (elapsed >= 800 && elapsed < 2000) factor = 6;
+      if (elapsed >= 2000) factor = 12;
+      unawaited(_applyBetDelta(_activeDelta * _betStep * factor, haptic: false));
+    });
+  }
+
+  void _stopContinuousBetAdjust() {
+    _adjustTimer?.cancel();
+    _adjustTimer = null;
+    _adjustWatch?.stop();
+    _adjustWatch = null;
   }
 
   void _setMaxBet() {
@@ -424,7 +476,15 @@ class _GoldenAvalancheScreenState extends State<GoldenAvalancheScreen>
               height: 80 * scale,
               tapScale: 0.62,
               tapOffset: const Offset(0, 59),
-              onTap: () {},
+              onTap: () {
+                HapticFeedback.lightImpact();
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        const MinersPassScreen(source: 'golden_avalanche'),
+                  ),
+                );
+              },
             ),
           ),
           SizedBox(width: 42 * scale),
@@ -572,6 +632,9 @@ class _GoldenAvalancheScreenState extends State<GoldenAvalancheScreen>
                   left: -12 * scale,
                   child: PressableButton(
                     onTap: () => _applyBetDelta(-_betStep),
+                    onLongPressStart: (_) => _startContinuousBetAdjust(-1),
+                    onLongPressEnd: (_) => _stopContinuousBetAdjust(),
+                    onLongPressCancel: _stopContinuousBetAdjust,
                     child: SizedBox(
                       width: 29 * scale,
                       height: 52 * scale,
@@ -586,6 +649,9 @@ class _GoldenAvalancheScreenState extends State<GoldenAvalancheScreen>
                   right: -12 * scale,
                   child: PressableButton(
                     onTap: () => _applyBetDelta(_betStep),
+                    onLongPressStart: (_) => _startContinuousBetAdjust(1),
+                    onLongPressEnd: (_) => _stopContinuousBetAdjust(),
+                    onLongPressCancel: _stopContinuousBetAdjust,
                     child: SizedBox(
                       width: 29 * scale,
                       height: 52 * scale,
