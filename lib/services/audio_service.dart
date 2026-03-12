@@ -17,8 +17,7 @@ class AudioService {
   static const _rouletteSpinAsset = 'assets/sounds/gold_vein/roulette_spin.wav';
   static const _wheelSpinAsset =
       'assets/sounds/miners_wheel_of_fortune/gumball_machine.ogg';
-  static const _drillingAsset =
-      'assets/sounds/mine_depth_tower/drilling.wav';
+  static const _drillingAsset = 'assets/sounds/mine_depth_tower/drilling.wav';
   static const _mineDepthTowerRoomDownAsset =
       'assets/sounds/mine_depth_tower/room_down.wav';
   static const _loseAsset = 'assets/sounds/lose/lose.wav';
@@ -48,6 +47,7 @@ class AudioService {
   final AudioPlayer _goldenAvalancheCoinPlayer = AudioPlayer();
   final AudioPlayer _treasureTrailLadderClaimPlayer = AudioPlayer();
   final AudioPlayer _cautiousMinerBoomPlayer = AudioPlayer();
+  final AudioPlayer _minersWheelSpinPlayer = AudioPlayer();
 
   StreamSubscription<Duration>? _bgPositionSub;
   StreamSubscription<PlayerState>? _bgStateSub;
@@ -63,15 +63,19 @@ class AudioService {
   bool _clickLoaded = false;
   bool _loseLoaded = false;
   bool _winLoaded = false;
+  bool _minersWheelSpinLoaded = false;
   double _bgVolumeBeforeDuck = 1.0;
 
   Future<void> preloadAssets() async {
     try {
       final session = await AudioSession.instance;
-      await session.configure(AudioSessionConfiguration.music().copyWith(
-        avAudioSessionCategoryOptions: AVAudioSessionCategoryOptions.mixWithOthers,
-        androidAudioFocusGainType: AndroidAudioFocusGainType.gain,
-      ));
+      await session.configure(
+        AudioSessionConfiguration.music().copyWith(
+          avAudioSessionCategoryOptions:
+              AVAudioSessionCategoryOptions.mixWithOthers,
+          androidAudioFocusGainType: AndroidAudioFocusGainType.gain,
+        ),
+      );
 
       await _bgPlayer.setAsset(_bgAsset);
       await _bgPlayer.setLoopMode(LoopMode.one);
@@ -92,7 +96,9 @@ class AudioService {
         _drillingLoaded = true;
       }
       if (!_mineDepthTowerRoomDownLoaded) {
-        await _mineDepthTowerRoomDownPlayer.setAsset(_mineDepthTowerRoomDownAsset);
+        await _mineDepthTowerRoomDownPlayer.setAsset(
+          _mineDepthTowerRoomDownAsset,
+        );
         _mineDepthTowerRoomDownLoaded = true;
       }
       if (!_goldenAvalancheCoinLoaded) {
@@ -101,7 +107,8 @@ class AudioService {
       }
       if (!_treasureTrailLadderClaimLoaded) {
         await _treasureTrailLadderClaimPlayer.setAsset(
-            _treasureTrailLadderClaimAsset);
+          _treasureTrailLadderClaimAsset,
+        );
         _treasureTrailLadderClaimLoaded = true;
       }
       if (!_cautiousMinerBoomLoaded) {
@@ -116,10 +123,13 @@ class AudioService {
         await _winPlayer.setAsset(_winAsset);
         _winLoaded = true;
       }
+      if (!_minersWheelSpinLoaded) {
+        await _minersWheelSpinPlayer.setAsset(_wheelSpinAsset);
+        _minersWheelSpinLoaded = true;
+      }
 
       // Warm bundle cache for shared SFX assets that reuse one player instance.
       await rootBundle.load(_rouletteSpinAsset);
-      await rootBundle.load(_wheelSpinAsset);
       await rootBundle.load(_chiefTrollsWheelSpinAsset);
     } catch (_) {}
   }
@@ -151,9 +161,11 @@ class AudioService {
       _bgPositionSub = _bgPlayer.positionStream.listen((pos) async {
         final dur = _bgPlayer.duration ?? Duration.zero;
         if (dur.inSeconds < _bgFadeStartBeforeEndSec) return;
-        final fadeStart = dur - const Duration(seconds: _bgFadeStartBeforeEndSec ~/ 1);
+        final fadeStart =
+            dur - const Duration(seconds: _bgFadeStartBeforeEndSec ~/ 1);
         if (pos >= fadeStart) {
-          final t = (pos.inMilliseconds - fadeStart.inMilliseconds) /
+          final t =
+              (pos.inMilliseconds - fadeStart.inMilliseconds) /
               (dur.inMilliseconds - fadeStart.inMilliseconds);
           final vol = (_bgVolume * (1.0 - t)).clamp(0.0, 1.0);
           await _bgPlayer.setVolume(vol);
@@ -212,6 +224,7 @@ class AudioService {
       await _goldenAvalancheCoinPlayer.stop();
       await _treasureTrailLadderClaimPlayer.stop();
       await _cautiousMinerBoomPlayer.stop();
+      await _minersWheelSpinPlayer.stop();
     } catch (_) {}
   }
 
@@ -234,7 +247,7 @@ class AudioService {
   /// Stop wheel spin sound. Call when ball animation ends.
   Future<void> stopWheelSpin() async {
     try {
-      await _sfxPlayer.stop();
+      await _minersWheelSpinPlayer.stop();
     } catch (_) {}
   }
 
@@ -265,11 +278,13 @@ class AudioService {
   Future<void> playWheelSpin(int durationMs) async {
     if (!SettingsService.soundEnabled) return;
     try {
-      await _sfxPlayer.stop();
-      await _sfxPlayer.setAsset(_wheelSpinAsset);
-      await _sfxPlayer.setVolume(1.0);
-      await _sfxPlayer.seek(Duration.zero);
-      await _sfxPlayer.play();
+      if (!_minersWheelSpinLoaded) {
+        await ensureMinersWheelSpinLoaded();
+      }
+      await _minersWheelSpinPlayer.stop();
+      await _minersWheelSpinPlayer.setVolume(1.0);
+      await _minersWheelSpinPlayer.seek(Duration.zero);
+      await _minersWheelSpinPlayer.play();
 
       final steps = 20;
       final stepMs = durationMs ~/ steps;
@@ -277,9 +292,9 @@ class AudioService {
         await Future<void>.delayed(Duration(milliseconds: stepMs));
         final t = i / steps;
         final vol = (1.0 - t).clamp(0.0, 1.0);
-        await _sfxPlayer.setVolume(vol);
+        await _minersWheelSpinPlayer.setVolume(vol);
       }
-      await _sfxPlayer.stop();
+      await _minersWheelSpinPlayer.stop();
       unawaited(_ensureBgSpeedCorrect());
     } catch (_) {}
   }
@@ -324,7 +339,8 @@ class AudioService {
     try {
       if (!_treasureTrailLadderClaimLoaded) {
         await _treasureTrailLadderClaimPlayer.setAsset(
-            _treasureTrailLadderClaimAsset);
+          _treasureTrailLadderClaimAsset,
+        );
         _treasureTrailLadderClaimLoaded = true;
       }
       await _treasureTrailLadderClaimPlayer.stop();
@@ -373,7 +389,9 @@ class AudioService {
     if (!SettingsService.soundEnabled) return;
     try {
       if (!_mineDepthTowerRoomDownLoaded) {
-        await _mineDepthTowerRoomDownPlayer.setAsset(_mineDepthTowerRoomDownAsset);
+        await _mineDepthTowerRoomDownPlayer.setAsset(
+          _mineDepthTowerRoomDownAsset,
+        );
         _mineDepthTowerRoomDownLoaded = true;
       }
       await _mineDepthTowerRoomDownPlayer.stop();
@@ -473,5 +491,6 @@ class AudioService {
     await _goldenAvalancheCoinPlayer.dispose();
     await _treasureTrailLadderClaimPlayer.dispose();
     await _cautiousMinerBoomPlayer.dispose();
+    await _minersWheelSpinPlayer.dispose();
   }
 }

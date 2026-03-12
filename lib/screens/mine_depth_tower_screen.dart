@@ -178,31 +178,39 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
       vsync: this,
       duration: const Duration(milliseconds: 560),
     )..addStatusListener(_onDropStatusChanged);
-    _balanceCountController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 520),
-    )..addListener(() {
-        if (!mounted) return;
-        final t = Curves.easeOutCubic.transform(_balanceCountController.value);
-        final next =
-            (uiLerp(_balanceAnimFrom, _balance.toDouble(), t)).round();
-        if (next == _displayBalance) return;
-        setState(() => _displayBalance = next);
-      });
-    _sinkController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: _sinkDurationMs),
-    )..addListener(() {
-        if (!mounted) return;
-        setState(() {});
-      });
-    _crashController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: _crashDurationMs),
-    )..addListener(() {
-        if (!mounted) return;
-        setState(() {});
-      });
+    _balanceCountController =
+        AnimationController(
+          vsync: this,
+          duration: const Duration(milliseconds: 520),
+        )..addListener(() {
+          if (!mounted) return;
+          final t = Curves.easeOutCubic.transform(
+            _balanceCountController.value,
+          );
+          final next = (uiLerp(
+            _balanceAnimFrom,
+            _balance.toDouble(),
+            t,
+          )).round();
+          if (next == _displayBalance) return;
+          setState(() => _displayBalance = next);
+        });
+    _sinkController =
+        AnimationController(
+          vsync: this,
+          duration: const Duration(milliseconds: _sinkDurationMs),
+        )..addListener(() {
+          if (!mounted) return;
+          setState(() {});
+        });
+    _crashController =
+        AnimationController(
+          vsync: this,
+          duration: const Duration(milliseconds: _crashDurationMs),
+        )..addListener(() {
+          if (!mounted) return;
+          setState(() {});
+        });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       _precacheAssets();
@@ -215,6 +223,8 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
 
   @override
   void dispose() {
+    _adjustTimer?.cancel();
+    _adjustWatch?.stop();
     BalanceService.balanceNotifier.removeListener(_onBalanceNotifierChanged);
     _adjustTimer?.cancel();
     _roomMoveController.dispose();
@@ -321,11 +331,7 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
         height: 1.6,
         letterSpacing: -0.02 * size,
         shadows: const [
-          Shadow(
-            color: _balanceStroke,
-            offset: Offset(0, 1.74),
-            blurRadius: 0,
-          ),
+          Shadow(color: _balanceStroke, offset: Offset(0, 1.74), blurRadius: 0),
         ],
       );
     }
@@ -353,7 +359,7 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
     final next = (_bet + delta).clamp(_minBet, _balance);
     if (next == _bet) return;
     setState(() => _bet = next);
-    await BalanceService.setLastBet(_bet);
+    unawaited(BalanceService.setLastBet(_bet));
     unawaited(AnalyticsService.reportBetChange(_gameName, _bet));
     if (haptic) HapticFeedback.selectionClick();
   }
@@ -367,7 +373,9 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
       var factor = 3;
       if (elapsed >= 800 && elapsed < 2000) factor = 6;
       if (elapsed >= 2000) factor = 12;
-      unawaited(_applyBetDelta(_activeDelta * _betStep * factor, haptic: false));
+      unawaited(
+        _applyBetDelta(_activeDelta * _betStep * factor, haptic: false),
+      );
     });
   }
 
@@ -428,7 +436,8 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
   }
 
   double _foundationSurfaceY(double scale) {
-    return _foundationTop(scale) + _towerScaled(_foundationSurfaceInsetTop, scale);
+    return _foundationTop(scale) +
+        _towerScaled(_foundationSurfaceInsetTop, scale);
   }
 
   double _swingProgress() {
@@ -438,7 +447,8 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
 
   int _currentSwingDurationMs() {
     final progress = _swingProgress();
-    final duration = _roomMoveBaseDurationMs -
+    final duration =
+        _roomMoveBaseDurationMs -
         ((_roomMoveBaseDurationMs - _roomMoveMinDurationMs) * progress).round();
     return duration.clamp(_roomMoveMinDurationMs, _roomMoveBaseDurationMs);
   }
@@ -456,11 +466,15 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
     final t = Curves.easeInOutSine.transform(_roomMoveController.value);
     final roomSize = _scaledRoomSize(room, scale);
     final halfField = _fieldCenterX(scale);
-    final maxAmplitude =
-        max(0.0, halfField - (roomSize.width / 2) - (_roomMoveSideMargin * scale));
+    final maxAmplitude = max(
+      0.0,
+      halfField - (roomSize.width / 2) - (_roomMoveSideMargin * scale),
+    );
     final progress = _swingProgress();
-    final amplitudeFactor = _roomMoveAmplitudeMinFactor +
-        ((_roomMoveAmplitudeMaxFactor - _roomMoveAmplitudeMinFactor) * progress);
+    final amplitudeFactor =
+        _roomMoveAmplitudeMinFactor +
+        ((_roomMoveAmplitudeMaxFactor - _roomMoveAmplitudeMinFactor) *
+            progress);
     final amplitude = maxAmplitude * amplitudeFactor;
     return halfField + ((t * 2) - 1) * amplitude;
   }
@@ -490,8 +504,11 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
     double direction,
   ) {
     final roomSize = _scaledRoomSize(room, scale);
-    final shiftedLeft = (from.dx + direction * (_failedDropHorizontalOffset * scale))
-        .clamp(0.0, (_fieldWidth * scale) - roomSize.width);
+    final shiftedLeft =
+        (from.dx + direction * (_failedDropHorizontalOffset * scale)).clamp(
+          0.0,
+          (_fieldWidth * scale) - roomSize.width,
+        );
     final impactVisibleBottomY =
         (_fieldHeight * scale) - (_failedDropBottomInset * scale);
     final impactTop =
@@ -499,21 +516,17 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
     return Offset(shiftedLeft, impactTop);
   }
 
-  Offset _roomTargetTopLeft(
-    _RoomAsset room,
-    double centerX,
-    double scale,
-  ) {
+  Offset _roomTargetTopLeft(_RoomAsset room, double centerX, double scale) {
     final roomSize = _scaledRoomSize(room, scale);
     final targetVisibleBottomY = _placedRooms.isEmpty
         ? _foundationSurfaceY(scale) - (_foundationLandingLift * scale)
         : _roomVisibleTopY(
-            _restingPlacedRoomTop(_placedRooms.length - 1, scale),
-            scale,
-          ) +
-            (_stackLandingExtraDown * scale);
-    final renderedTop = targetVisibleBottomY -
-        _roomVisibleBottomOffset(roomSize, scale);
+                _restingPlacedRoomTop(_placedRooms.length - 1, scale),
+                scale,
+              ) +
+              (_stackLandingExtraDown * scale);
+    final renderedTop =
+        targetVisibleBottomY - _roomVisibleBottomOffset(roomSize, scale);
     return Offset(centerX - roomSize.width / 2, renderedTop);
   }
 
@@ -616,18 +629,16 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
     final room = _activeRoom;
     if (room == null) return;
     if (_bet <= 0 || _balance < _bet) {
-      showWarningSnackBar(
-        context,
-        'Not enough coins to start the game.',
-      );
+      showWarningSnackBar(context, 'Not enough coins to start the game.');
       return;
     }
 
     final scale = _screenScale(context);
     final from = _activeRoomTopLeft(room, scale);
     final roomSize = _scaledRoomSize(room, scale);
-    final targetCenter =
-        _placedRooms.isEmpty ? _fieldCenterX(scale) : _placedRooms.last.centerX;
+    final targetCenter = _placedRooms.isEmpty
+        ? _fieldCenterX(scale)
+        : _placedRooms.last.centerX;
     final currentCenter = from.dx + roomSize.width / 2;
     final tolerance = _placedRooms.isEmpty
         ? 44 * scale
@@ -636,11 +647,7 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
     final failDirection = currentCenter >= targetCenter ? 1.0 : -1.0;
 
     final to = success
-        ? _roomTargetTopLeft(
-            room,
-            currentCenter,
-            scale,
-          )
+        ? _roomTargetTopLeft(room, currentCenter, scale)
         : _failedDropTarget(room, from, scale, failDirection);
 
     setState(() {
@@ -940,9 +947,11 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
             ),
           ),
           for (final room in _placedRooms) _buildPlacedRoom(room, scale),
-          if (_crashRoom != null && _crashTopLeft != null) _buildCrashRoom(scale),
+          if (_crashRoom != null && _crashTopLeft != null)
+            _buildCrashRoom(scale),
           if (_activeRoom != null && !_isDropping) _buildHangingRig(scale),
-          if (_droppingRoom != null && _dropFrom != null) _buildReleasedRig(scale),
+          if (_droppingRoom != null && _dropFrom != null)
+            _buildReleasedRig(scale),
           if (_droppingRoom != null && _dropFrom != null && _dropTo != null)
             _buildDroppingRoom(scale),
           if (_activeRoom != null && !_isDropping) _buildActiveRoom(scale),
@@ -993,7 +1002,8 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
           child: Image.asset(
             room.asset,
             fit: BoxFit.contain,
-            errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
+            errorBuilder: (context, error, stackTrace) =>
+                const SizedBox.shrink(),
           ),
         ),
       ),
@@ -1012,8 +1022,10 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
     final startLeft = _activeRoomTopLeft(room, scale).dx;
     final initialCenterX = startLeft + roomSize.width / 2;
     final initialRoomTop = _activeRoomTopLeft(room, scale).dy;
-    final initialTrossTop =
-        max(0.0, initialRoomTop - hookTop - trossH - trossDownOffset);
+    final initialTrossTop = max(
+      0.0,
+      initialRoomTop - hookTop - trossH - trossDownOffset,
+    );
     final rigHeight = initialTrossTop + trossH;
     final rigWidth = max(hookW, trossW);
 
@@ -1026,8 +1038,10 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
           final currentLeft = _activeRoomTopLeft(room, scale).dx;
           final currentCenterX = currentLeft + roomSize.width / 2;
           final currentRoomTop = _activeRoomTopLeft(room, scale).dy;
-          final currentTrossTop =
-              max(0.0, currentRoomTop - hookTop - trossH - trossDownOffset);
+          final currentTrossTop = max(
+            0.0,
+            currentRoomTop - hookTop - trossH - trossDownOffset,
+          );
           return Transform.translate(
             offset: Offset(currentCenterX - initialCenterX, 0),
             child: SizedBox(
@@ -1178,10 +1192,7 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
                   child: Transform.rotate(
                     angle: -0.42 * _crashDirection * t,
                     alignment: Alignment.centerRight,
-                    child: Opacity(
-                      opacity: 1 - (t * 0.45),
-                      child: child,
-                    ),
+                    child: Opacity(opacity: 1 - (t * 0.45), child: child),
                   ),
                 );
               },
@@ -1209,10 +1220,7 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
                   child: Transform.rotate(
                     angle: 0.58 * _crashDirection * t,
                     alignment: Alignment.centerLeft,
-                    child: Opacity(
-                      opacity: 1 - (t * 0.55),
-                      child: child,
-                    ),
+                    child: Opacity(opacity: 1 - (t * 0.55), child: child),
                   ),
                 );
               },
@@ -1387,10 +1395,7 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
                       child: SizedBox(
                         width: _buildButtonWidth * scale,
                         height: _buildButtonHeight * scale,
-                        child: Image.asset(
-                          buttonAsset,
-                          fit: BoxFit.fill,
-                        ),
+                        child: Image.asset(buttonAsset, fit: BoxFit.fill),
                       ),
                     ),
                   ),
@@ -1569,11 +1574,7 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
       child: SafeArea(
         child: Stack(
           children: [
-            Positioned.fill(
-              child: Center(
-                child: _buildGameField(scale),
-              ),
-            ),
+            Positioned.fill(child: Center(child: _buildGameField(scale))),
             Positioned.fill(
               child: IgnorePointer(
                 child: Container(color: const Color(0x66000000)),
@@ -1612,9 +1613,7 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
                   clipBehavior: Clip.none,
                   children: [
                     Positioned.fill(
-                      child: Center(
-                        child: _buildGameField(scale),
-                      ),
+                      child: Center(child: _buildGameField(scale)),
                     ),
                     _buildMultiplierPlate(scale),
                   ],
@@ -1672,10 +1671,7 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
 }
 
 class _RoomAsset {
-  const _RoomAsset({
-    required this.asset,
-    required this.sourceSize,
-  });
+  const _RoomAsset({required this.asset, required this.sourceSize});
 
   final String asset;
   final Size sourceSize;

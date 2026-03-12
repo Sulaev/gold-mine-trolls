@@ -42,6 +42,9 @@ class _ChiefTrollsWheelScreenState extends State<ChiefTrollsWheelScreen>
   late final AnimationController _winCountController;
   late final AnimationController _balanceCountController;
   late final math.Random _rng;
+  Timer? _adjustTimer;
+  Stopwatch? _adjustWatch;
+  final int _activeDelta = 0;
   bool _isWinOverlayVisible = false;
   int _overlayTargetWin = 0;
   int _overlayAnimatedWin = 0;
@@ -62,7 +65,6 @@ class _ChiefTrollsWheelScreenState extends State<ChiefTrollsWheelScreen>
     0,
   ];
   static const _firstZoneCenterDeg = 0.0;
-  static const _zeroVisualNudgeDeg = -8.0;
 
   Timer? _adjustTimer;
   Stopwatch? _adjustWatch;
@@ -123,6 +125,8 @@ class _ChiefTrollsWheelScreenState extends State<ChiefTrollsWheelScreen>
 
   @override
   void dispose() {
+    _adjustTimer?.cancel();
+    _adjustWatch?.stop();
     BalanceService.balanceNotifier.removeListener(_onBalanceNotifierChanged);
     _adjustTimer?.cancel();
     _adjustWatch?.stop();
@@ -280,7 +284,7 @@ class _ChiefTrollsWheelScreenState extends State<ChiefTrollsWheelScreen>
     final next = (_bet + delta).clamp(_minBet, _balance);
     if (next == _bet) return;
     setState(() => _bet = next);
-    await BalanceService.setLastBet(_bet);
+    unawaited(BalanceService.setLastBet(_bet));
     unawaited(AnalyticsService.reportBetChange(_gameName, _bet));
     if (haptic) HapticFeedback.selectionClick();
   }
@@ -294,7 +298,9 @@ class _ChiefTrollsWheelScreenState extends State<ChiefTrollsWheelScreen>
       var factor = 3;
       if (elapsed >= 800 && elapsed < 2000) factor = 6;
       if (elapsed >= 2000) factor = 12;
-      unawaited(_applyBetDelta(_activeDelta * _betStep * factor, haptic: false));
+      unawaited(
+        _applyBetDelta(_activeDelta * _betStep * factor, haptic: false),
+      );
     });
   }
 
@@ -342,10 +348,7 @@ class _ChiefTrollsWheelScreenState extends State<ChiefTrollsWheelScreen>
     if (_isSpinning || _loadingBalance) return;
     if (_bet <= 0 || _balance < _bet) {
       HapticFeedback.heavyImpact();
-      showWarningSnackBar(
-        context,
-        'Not enough coins to start the game.',
-      );
+      showWarningSnackBar(context, 'Not enough coins to start the game.');
       return;
     }
     HapticFeedback.lightImpact();
@@ -356,10 +359,7 @@ class _ChiefTrollsWheelScreenState extends State<ChiefTrollsWheelScreen>
 
     final targetMultiplier = _pickWeightedMultiplier();
     final targetIndex = _pickIndexForMultiplier(targetMultiplier);
-    var desiredAngle = -_zoneCenterAngle(targetIndex);
-    if (targetMultiplier == 0) {
-      desiredAngle += _zeroVisualNudgeDeg * math.pi / 180;
-    }
+    final desiredAngle = -_zoneCenterAngle(targetIndex);
     final currentNorm = _normalizeAngle(_wheelAngle);
     final desiredNorm = _normalizeAngle(desiredAngle);
     final delta = _normalizeAngle(desiredNorm - currentNorm);
@@ -394,9 +394,10 @@ class _ChiefTrollsWheelScreenState extends State<ChiefTrollsWheelScreen>
     final landedMultiplier = _zoneMultipliers[targetIndex];
     final winAmount = (_bet * landedMultiplier).round();
     final settledBalance = afterBet + winAmount;
+    final exactAngle = _normalizeAngle(desiredAngle);
     setState(() {
       _isSpinning = false;
-      _wheelAngle = end;
+      _wheelAngle = exactAngle;
       _lastWinAmount = winAmount;
       _balance = settledBalance;
     });

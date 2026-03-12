@@ -139,18 +139,18 @@ class _GoldVeinScreenState extends State<GoldVeinScreen>
 
   // Payout multipliers per payline (3 matching symbols) — matches info screen.
   final List<double> _symbolMultipliers = const [
-    10.0,  // 1.1
-    1.3,   // 1.2
-    0.4,   // 1.3
-    0.7,   // 1.4
-    0.2,   // 1.5
-    2.6,   // 1.6
-    6.5,   // 1.7
-    3.5,   // 1.8
-    8.2,   // 1.9
-    1.8,   // 1.10
-    4.8,   // 1.11
-    0.9,   // 1.12
+    10.0, // 1.1
+    1.3, // 1.2
+    0.4, // 1.3
+    0.7, // 1.4
+    0.2, // 1.5
+    2.6, // 1.6
+    6.5, // 1.7
+    3.5, // 1.8
+    8.2, // 1.9
+    1.8, // 1.10
+    4.8, // 1.11
+    0.9, // 1.12
   ];
 
   /// Jackpot: all 15 cells same symbol. Odds 1:1000.
@@ -443,10 +443,7 @@ class _GoldVeinScreenState extends State<GoldVeinScreen>
     if (_isSpinning) return;
     if (_bet <= 0) return;
     if (_balance < _bet) {
-      showWarningSnackBar(
-        context,
-        'Not enough coins to start the game.',
-      );
+      showWarningSnackBar(context, 'Not enough coins to start the game.');
       setState(() => _autoSpin = false);
       return;
     }
@@ -538,7 +535,13 @@ class _GoldVeinScreenState extends State<GoldVeinScreen>
     }
   }
 
-  ({int minStepMs, int maxStepMs, Curve curve, int settleBaseMs, int settleStepMs})
+  ({
+    int minStepMs,
+    int maxStepMs,
+    Curve curve,
+    int settleBaseMs,
+    int settleStepMs,
+  })
   _spinProfileForReel(int reel) {
     switch (reel) {
       case 0:
@@ -592,8 +595,7 @@ class _GoldVeinScreenState extends State<GoldVeinScreen>
       final progress = (elapsedMs / durationMs).clamp(0.0, 1.0);
       final eased = profile.curve.transform(progress);
       final stepMs =
-          (profile.minStepMs +
-                  (profile.maxStepMs - profile.minStepMs) * eased)
+          (profile.minStepMs + (profile.maxStepMs - profile.minStepMs) * eased)
               .round();
       final topSymbol = _weightedRandomSymbol();
 
@@ -615,8 +617,8 @@ class _GoldVeinScreenState extends State<GoldVeinScreen>
       });
       await Future.delayed(
         Duration(
-          milliseconds: profile.settleBaseMs +
-              settleStep * profile.settleStepMs,
+          milliseconds:
+              profile.settleBaseMs + settleStep * profile.settleStepMs,
         ),
       );
     }
@@ -714,6 +716,9 @@ class _GoldVeinScreenState extends State<GoldVeinScreen>
   }
 
   void _applyBetDelta(int delta, {bool haptic = true}) {
+    if (_tutorialStateLoaded && _tutorialStep == 2 && delta > 0) {
+      unawaited(_completeTutorialStepTwo());
+    }
     if (_loadingBalance || _balance <= 0) return;
     final next = (_bet + delta).clamp(_minBet, _balance);
     if (next == _bet) return;
@@ -722,6 +727,9 @@ class _GoldVeinScreenState extends State<GoldVeinScreen>
     unawaited(AnalyticsService.reportBetChange(_gameName, _bet));
     if (haptic) HapticFeedback.selectionClick();
   }
+
+  static const _holdSteps = [50, 100, 500, 1000, 10000, 100000];
+  static const _holdStepIntervalMs = 800;
 
   void _startContinuousBetAdjust(int delta) {
     _stopContinuousBetAdjust();
@@ -744,6 +752,9 @@ class _GoldVeinScreenState extends State<GoldVeinScreen>
   }
 
   void _setMaxBet() {
+    if (_tutorialStateLoaded && _tutorialStep == 2) {
+      unawaited(_completeTutorialStepTwo());
+    }
     if (_balance <= 0) return;
     if (_bet == _balance) return;
     setState(() => _bet = _balance);
@@ -874,13 +885,16 @@ class _GoldVeinScreenState extends State<GoldVeinScreen>
                   },
                   transitionBuilder: (child, animation) {
                     return SlideTransition(
-                      position: Tween<Offset>(
-                        begin: const Offset(0, -0.08),
-                        end: Offset.zero,
-                      ).animate(CurvedAnimation(
-                        parent: animation,
-                        curve: Curves.easeOutCubic,
-                      )),
+                      position:
+                          Tween<Offset>(
+                            begin: const Offset(0, -0.08),
+                            end: Offset.zero,
+                          ).animate(
+                            CurvedAnimation(
+                              parent: animation,
+                              curve: Curves.easeOutCubic,
+                            ),
+                          ),
                       child: child,
                     );
                   },
@@ -1742,49 +1756,49 @@ class _GoldVeinScreenState extends State<GoldVeinScreen>
                                             offset: Offset(0, 5 * scale),
                                             child: PressableButton(
                                               onTap: _toggleAutoSpin,
-                                            child: SizedBox(
-                                              width: 69 * scale,
-                                              height: 27 * scale,
-                                              child: Opacity(
-                                                opacity: _autoSpin ? 1 : 0.75,
-                                                child: Image.asset(
-                                                  _autoSpin
-                                                      ? 'assets/images/gold_vein/stop_btn.png'
-                                                      : 'assets/images/gold_vein/auto_btn.png',
-                                                  fit: BoxFit.fill,
+                                              child: SizedBox(
+                                                width: 69 * scale,
+                                                height: 27 * scale,
+                                                child: Opacity(
+                                                  opacity: _autoSpin ? 1 : 0.75,
+                                                  child: Image.asset(
+                                                    _autoSpin
+                                                        ? 'assets/images/gold_vein/stop_btn.png'
+                                                        : 'assets/images/gold_vein/auto_btn.png',
+                                                    fit: BoxFit.fill,
+                                                  ),
                                                 ),
                                               ),
                                             ),
                                           ),
-                                        ),
-                                        SizedBox(height: 8 * scale),
-                                        IgnorePointer(
-                                          ignoring: _isSpinning,
-                                          child: PressableButton(
-                                            onTap: _onSpinTap,
-                                            child: SizedBox(
-                                              width: 103 * scale,
-                                              height: 58 * scale,
-                                              child: ColorFiltered(
-                                                colorFilter: _isSpinning
-                                                    ? const ColorFilter.mode(
-                                                        Color(0x99000000),
-                                                        BlendMode.srcATop,
-                                                      )
-                                                    : const ColorFilter.mode(
-                                                        Colors.transparent,
-                                                        BlendMode.srcOver,
-                                                      ),
-                                                child: Image.asset(
-                                                  'assets/images/gold_vein/spin_btn.png',
-                                                  fit: BoxFit.fill,
+                                          SizedBox(height: 8 * scale),
+                                          IgnorePointer(
+                                            ignoring: _isSpinning,
+                                            child: PressableButton(
+                                              onTap: _onSpinTap,
+                                              child: SizedBox(
+                                                width: 103 * scale,
+                                                height: 58 * scale,
+                                                child: ColorFiltered(
+                                                  colorFilter: _isSpinning
+                                                      ? const ColorFilter.mode(
+                                                          Color(0x99000000),
+                                                          BlendMode.srcATop,
+                                                        )
+                                                      : const ColorFilter.mode(
+                                                          Colors.transparent,
+                                                          BlendMode.srcOver,
+                                                        ),
+                                                  child: Image.asset(
+                                                    'assets/images/gold_vein/spin_btn.png',
+                                                    fit: BoxFit.fill,
+                                                  ),
                                                 ),
                                               ),
                                             ),
                                           ),
-                                        ),
-                                      ],
-                                    ),
+                                        ],
+                                      ),
                                     ),
                             ],
                           ),
@@ -1839,8 +1853,9 @@ class _GoldVeinScreenState extends State<GoldVeinScreen>
                                   HapticFeedback.lightImpact();
                                   Navigator.of(context).push(
                                     MaterialPageRoute(
-                                      builder: (_) =>
-                                          const MinersPassScreen(source: 'gold_vein'),
+                                      builder: (_) => const MinersPassScreen(
+                                        source: 'gold_vein',
+                                      ),
                                     ),
                                   );
                                 },

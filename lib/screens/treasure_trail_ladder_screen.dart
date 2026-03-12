@@ -69,7 +69,7 @@ class _TreasureTrailLadderScreenState extends State<TreasureTrailLadderScreen>
 
   Timer? _adjustTimer;
   Stopwatch? _adjustWatch;
-  int _activeDelta = 0;
+  final int _activeDelta = 0;
 
   // true = gold, false = dynamite
   List<List<bool>> _rowMap = List.generate(
@@ -78,6 +78,9 @@ class _TreasureTrailLadderScreenState extends State<TreasureTrailLadderScreen>
   );
   final Set<int> _revealed = <int>{};
   final Set<int> _selected = <int>{};
+  Timer? _adjustTimer;
+  Stopwatch? _adjustWatch;
+  int _activeDelta = 0;
 
   @override
   void initState() {
@@ -130,6 +133,8 @@ class _TreasureTrailLadderScreenState extends State<TreasureTrailLadderScreen>
 
   @override
   void dispose() {
+    _adjustTimer?.cancel();
+    _adjustWatch?.stop();
     BalanceService.balanceNotifier.removeListener(_onBalanceNotifierChanged);
     _adjustTimer?.cancel();
     _adjustWatch?.stop();
@@ -184,24 +189,23 @@ class _TreasureTrailLadderScreenState extends State<TreasureTrailLadderScreen>
       barrierLabel: 'Close info',
       barrierColor: const Color(0x80000000),
       transitionDuration: const Duration(milliseconds: 200),
-      pageBuilder: (context, animation, secondaryAnimation) =>
-          InfoScreen(
-            content: Padding(
-              padding: const EdgeInsets.only(top: 70, left: 40, right: 40),
-              child: SingleChildScrollView(
-                child: Text(
-                  'The game consists of 10 levels, each featuring 5 cells. Your goal is to choose the right cell to progress. '
-                  'On every level, you must open one of the five cells. As you advance, the chances of winning decrease, making the game more challenging.\n'
-                  'Each cell hides either a gold nugget or a spider web.\n'
-                  'If you open a cell with a gold nugget, you win the round, your winnings increase, and you move to the next level.\n'
-                  'If you open a cell with a spider web, you lose everything and the game ends.\n'
-                  'You can stop at any time and cash out your current winnings.',
-                  textAlign: TextAlign.center,
-                  style: InfoScreen.mainTextStyle(),
-                ),
-              ),
+      pageBuilder: (context, animation, secondaryAnimation) => InfoScreen(
+        content: Padding(
+          padding: const EdgeInsets.only(top: 70, left: 40, right: 40),
+          child: SingleChildScrollView(
+            child: Text(
+              'The game consists of 10 levels, each featuring 5 cells. Your goal is to choose the right cell to progress. '
+              'On every level, you must open one of the five cells. As you advance, the chances of winning decrease, making the game more challenging.\n'
+              'Each cell hides either a gold nugget or a spider web.\n'
+              'If you open a cell with a gold nugget, you win the round, your winnings increase, and you move to the next level.\n'
+              'If you open a cell with a spider web, you lose everything and the game ends.\n'
+              'You can stop at any time and cash out your current winnings.',
+              textAlign: TextAlign.center,
+              style: InfoScreen.mainTextStyle(),
             ),
           ),
+        ),
+      ),
     );
   }
 
@@ -331,7 +335,7 @@ class _TreasureTrailLadderScreenState extends State<TreasureTrailLadderScreen>
     final next = (_bet + delta).clamp(_minBet, _balance);
     if (next == _bet) return;
     setState(() => _bet = next);
-    await BalanceService.setLastBet(_bet);
+    unawaited(BalanceService.setLastBet(_bet));
     unawaited(AnalyticsService.reportBetChange(_gameName, _bet));
     if (haptic) HapticFeedback.selectionClick();
   }
@@ -345,7 +349,9 @@ class _TreasureTrailLadderScreenState extends State<TreasureTrailLadderScreen>
       var factor = 3;
       if (elapsed >= 800 && elapsed < 2000) factor = 6;
       if (elapsed >= 2000) factor = 12;
-      unawaited(_applyBetDelta(_activeDelta * _betStep * factor, haptic: false));
+      unawaited(
+        _applyBetDelta(_activeDelta * _betStep * factor, haptic: false),
+      );
     });
   }
 
@@ -407,10 +413,7 @@ class _TreasureTrailLadderScreenState extends State<TreasureTrailLadderScreen>
   Future<void> _startRun() async {
     if (_loadingBalance || _inRun || _isGameOver) return;
     if (_bet <= 0 || _balance < _bet) {
-      showWarningSnackBar(
-        context,
-        'Not enough coins to start the game.',
-      );
+      showWarningSnackBar(context, 'Not enough coins to start the game.');
       return;
     }
     final nextBalance = _balance - _bet;
@@ -1102,12 +1105,14 @@ class _TreasureTrailLadderScreenState extends State<TreasureTrailLadderScreen>
                 child: Stack(
                   children: [
                     if (!_isGameOver)
-                      Positioned.fill(
-                        child: Align(
-                          alignment: Alignment.topCenter,
-                          child: Transform.translate(
-                            // Let grid pass under top HUD elements.
-                            offset: Offset(0, 178 * scale),
+                      Positioned(
+                        top: 198 * scale,
+                        left: 0,
+                        right: 0,
+                        bottom: 248 * scale,
+                        child: Center(
+                          child: FittedBox(
+                            fit: BoxFit.contain,
                             child: _buildGrid(scale),
                           ),
                         ),

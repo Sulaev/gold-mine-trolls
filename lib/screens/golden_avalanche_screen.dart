@@ -38,15 +38,19 @@ class _GoldenAvalancheScreenState extends State<GoldenAvalancheScreen>
   static const _chestGap = 4.0;
   static const _pegRows = [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13];
 
-  static const _multipliersLow = [
-    0.5, 1.0, 1.5, 2.0, 2.5, 2.0, 1.5, 1.0, 0.5,
-  ];
+  static const _multipliersLow = [0.5, 1.0, 1.5, 2.0, 2.5, 2.0, 1.5, 1.0, 0.5];
   static const _multipliersNormal = [
-    4.5, 3.5, 2.5, 1.0, 0.5, 1.0, 2.5, 3.5, 4.5,
+    4.5,
+    3.5,
+    2.5,
+    1.0,
+    0.5,
+    1.0,
+    2.5,
+    3.5,
+    4.5,
   ];
-  static const _multipliersHigh = [
-    8.0, 6.0, 4.0, 2.0, 1.0, 2.0, 4.0, 6.0, 8.0,
-  ];
+  static const _multipliersHigh = [8.0, 6.0, 4.0, 2.0, 1.0, 2.0, 4.0, 6.0, 8.0];
 
   final _rng = Random();
   late final AnimationController _balanceCountController;
@@ -66,6 +70,9 @@ class _GoldenAvalancheScreenState extends State<GoldenAvalancheScreen>
   Ticker? _physicsTicker;
   bool _autoDrop = false;
   Timer? _autoDropTimer;
+  Timer? _adjustTimer;
+  Stopwatch? _adjustWatch;
+  final int _activeDelta = 0;
 
   Timer? _adjustTimer;
   Stopwatch? _adjustWatch;
@@ -75,17 +82,20 @@ class _GoldenAvalancheScreenState extends State<GoldenAvalancheScreen>
   void initState() {
     super.initState();
     unawaited(AnalyticsService.reportGameStart(_gameName));
-    _balanceCountController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 520),
-    )..addListener(() {
-        if (!mounted) return;
-        final t = Curves.easeOutCubic.transform(_balanceCountController.value);
-        final next =
-            (_balanceAnimFrom + (_balance - _balanceAnimFrom) * t).round();
-        if (next == _displayBalance) return;
-        setState(() => _displayBalance = next);
-      });
+    _balanceCountController =
+        AnimationController(
+          vsync: this,
+          duration: const Duration(milliseconds: 520),
+        )..addListener(() {
+          if (!mounted) return;
+          final t = Curves.easeOutCubic.transform(
+            _balanceCountController.value,
+          );
+          final next = (_balanceAnimFrom + (_balance - _balanceAnimFrom) * t)
+              .round();
+          if (next == _displayBalance) return;
+          setState(() => _displayBalance = next);
+        });
     BalanceService.balanceNotifier.addListener(_onBalanceNotifierChanged);
     _loadBalance();
   }
@@ -105,6 +115,8 @@ class _GoldenAvalancheScreenState extends State<GoldenAvalancheScreen>
 
   @override
   void dispose() {
+    _adjustTimer?.cancel();
+    _adjustWatch?.stop();
     BalanceService.balanceNotifier.removeListener(_onBalanceNotifierChanged);
     _autoDropTimer?.cancel();
     _adjustTimer?.cancel();
@@ -174,8 +186,10 @@ class _GoldenAvalancheScreenState extends State<GoldenAvalancheScreen>
   }
 
   String _formatCompact(int value) {
-    if (value >= 1000000) return '${(value / 1000000).toStringAsFixed(1).replaceAll('.0', '')}M';
-    if (value >= 1000) return '${(value / 1000).toStringAsFixed(1).replaceAll('.0', '')}k';
+    if (value >= 1000000)
+      return '${(value / 1000000).toStringAsFixed(1).replaceAll('.0', '')}M';
+    if (value >= 1000)
+      return '${(value / 1000).toStringAsFixed(1).replaceAll('.0', '')}k';
     return value.toString();
   }
 
@@ -248,7 +262,8 @@ class _GoldenAvalancheScreenState extends State<GoldenAvalancheScreen>
     final boardWidth = (9 * _chestWidth + 8 * _chestGap) * scale;
     final boardCenterX = boardWidth / 2;
     final pegGridTop = _ballBackSize * scale + 8 * scale;
-    final chestRowTop = pegGridTop +
+    final chestRowTop =
+        pegGridTop +
         _pegRows.length * (_pegSize * scale + 16 * scale) +
         (12 - 20) * scale;
     final chestW = _chestWidth * scale;
@@ -376,10 +391,7 @@ class _GoldenAvalancheScreenState extends State<GoldenAvalancheScreen>
   Future<void> _onDrop() async {
     if (_loadingBalance || _balance < _bet) {
       if (!_loadingBalance) {
-        showWarningSnackBar(
-          context,
-          'Not enough coins to start the game.',
-        );
+        showWarningSnackBar(context, 'Not enough coins to start the game.');
       }
       return;
     }
@@ -412,7 +424,7 @@ class _GoldenAvalancheScreenState extends State<GoldenAvalancheScreen>
     final next = (_bet + delta).clamp(_minBet, _balance);
     if (next == _bet) return;
     setState(() => _bet = next);
-    await BalanceService.setLastBet(_bet);
+    unawaited(BalanceService.setLastBet(_bet));
     unawaited(AnalyticsService.reportBetChange(_gameName, _bet));
     if (haptic) HapticFeedback.selectionClick();
   }
@@ -426,7 +438,9 @@ class _GoldenAvalancheScreenState extends State<GoldenAvalancheScreen>
       var factor = 3;
       if (elapsed >= 800 && elapsed < 2000) factor = 6;
       if (elapsed >= 2000) factor = 12;
-      unawaited(_applyBetDelta(_activeDelta * _betStep * factor, haptic: false));
+      unawaited(
+        _applyBetDelta(_activeDelta * _betStep * factor, haptic: false),
+      );
     });
   }
 
@@ -441,9 +455,9 @@ class _GoldenAvalancheScreenState extends State<GoldenAvalancheScreen>
     if (_loadingBalance || _balance <= 0) return;
     if (_bet == _balance) return;
     setState(() => _bet = _balance);
-    BalanceService.setLastBet(_bet);
+    unawaited(BalanceService.setLastBet(_bet));
     unawaited(AnalyticsService.reportBetChange(_gameName, _bet));
-    HapticFeedback.selectionClick();
+    HapticFeedback.lightImpact();
   }
 
   Widget _buildTopBar(double scale) {
@@ -488,10 +502,7 @@ class _GoldenAvalancheScreenState extends State<GoldenAvalancheScreen>
             ),
           ),
           SizedBox(width: 42 * scale),
-          SizedBox(
-            width: 38 * scale,
-            height: 38 * scale,
-          ),
+          SizedBox(width: 38 * scale, height: 38 * scale),
         ],
       ),
     );
@@ -581,6 +592,7 @@ class _GoldenAvalancheScreenState extends State<GoldenAvalancheScreen>
         ),
       );
     }
+
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
@@ -817,18 +829,18 @@ class _GoldenAvalancheScreenState extends State<GoldenAvalancheScreen>
             for (final ball in _balls)
               if (ball.chestIndex == null)
                 Positioned(
-                key: ValueKey('fall_${ball.id}'),
-                left: ball.x - ballSize / 2,
-                top: ball.y - ballSize / 2,
-                child: SizedBox(
-                  width: ballSize,
-                  height: ballSize,
-                  child: Image.asset(
-                    'assets/images/golden_avalanche/ball.png',
-                    fit: BoxFit.contain,
+                  key: ValueKey('fall_${ball.id}'),
+                  left: ball.x - ballSize / 2,
+                  top: ball.y - ballSize / 2,
+                  child: SizedBox(
+                    width: ballSize,
+                    height: ballSize,
+                    child: Image.asset(
+                      'assets/images/golden_avalanche/ball.png',
+                      fit: BoxFit.contain,
+                    ),
                   ),
                 ),
-              ),
           ],
         ),
       ),
@@ -993,65 +1005,66 @@ class _GoldenAvalancheScreenState extends State<GoldenAvalancheScreen>
                     ),
                   ),
                   if (win != null)
-                  TweenAnimationBuilder<double>(
-                    key: ValueKey('fly_$i _$win'),
-                    tween: Tween(begin: 0, end: 1),
-                    duration: const Duration(milliseconds: 500),
-                    curve: Curves.easeOut,
-                    builder: (_, t, _) {
-                      final y = chestH * scale / 2 + 20 * scale - 60 * t * scale;
-                      return Positioned(
-                        left: 0,
-                        right: 0,
-                        top: y,
-                        child: Center(
-                          child: Stack(
-                            children: [
-                              Text(
-                                _formatCompact(win),
-                                overflow: TextOverflow.ellipsis,
-                                maxLines: 1,
-                                style: TextStyle(
-                                  fontFamily: 'Gotham',
-                                  fontWeight: FontWeight.w900,
-                                  fontSize: 10 * scale,
-                                  height: 1.6,
-                                  letterSpacing: -0.02 * 10 * scale,
-                                  foreground: Paint()
-                                    ..style = PaintingStyle.stroke
-                                    ..strokeWidth = 1.8 * scale
-                                    ..color = const Color(0xFF2A1810),
+                    TweenAnimationBuilder<double>(
+                      key: ValueKey('fly_$i _$win'),
+                      tween: Tween(begin: 0, end: 1),
+                      duration: const Duration(milliseconds: 500),
+                      curve: Curves.easeOut,
+                      builder: (_, t, _) {
+                        final y =
+                            chestH * scale / 2 + 20 * scale - 60 * t * scale;
+                        return Positioned(
+                          left: 0,
+                          right: 0,
+                          top: y,
+                          child: Center(
+                            child: Stack(
+                              children: [
+                                Text(
+                                  _formatCompact(win),
+                                  overflow: TextOverflow.ellipsis,
+                                  maxLines: 1,
+                                  style: TextStyle(
+                                    fontFamily: 'Gotham',
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 10 * scale,
+                                    height: 1.6,
+                                    letterSpacing: -0.02 * 10 * scale,
+                                    foreground: Paint()
+                                      ..style = PaintingStyle.stroke
+                                      ..strokeWidth = 1.8 * scale
+                                      ..color = const Color(0xFF2A1810),
+                                  ),
                                 ),
-                              ),
-                              Text(
-                                _formatCompact(win),
-                                overflow: TextOverflow.ellipsis,
-                                maxLines: 1,
-                                style: TextStyle(
-                                  fontFamily: 'Gotham',
-                                  fontWeight: FontWeight.w900,
-                                  fontSize: 10 * scale,
-                                  height: 1.6,
-                                  letterSpacing: -0.02 * 10 * scale,
-                                  color: const Color(0xFFF3FF45),
-                                  shadows: const [
-                                    Shadow(
-                                      color: Color(0x40000000),
-                                      offset: Offset(0, 1.35),
-                                      blurRadius: 0,
-                                    ),
-                                  ],
+                                Text(
+                                  _formatCompact(win),
+                                  overflow: TextOverflow.ellipsis,
+                                  maxLines: 1,
+                                  style: TextStyle(
+                                    fontFamily: 'Gotham',
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 10 * scale,
+                                    height: 1.6,
+                                    letterSpacing: -0.02 * 10 * scale,
+                                    color: const Color(0xFFF3FF45),
+                                    shadows: const [
+                                      Shadow(
+                                        color: Color(0x40000000),
+                                        offset: Offset(0, 1.35),
+                                        blurRadius: 0,
+                                      ),
+                                    ],
+                                  ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
-                        ),
-                      );
-                    },
-                  ),
-              ],
+                        );
+                      },
+                    ),
+                ],
+              ),
             ),
-          ),
           );
         }),
       ),
@@ -1089,9 +1102,7 @@ class _GoldenAvalancheScreenState extends State<GoldenAvalancheScreen>
                         child: SingleChildScrollView(
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
-                            children: [
-                              _buildPlinkoField(scale),
-                            ],
+                            children: [_buildPlinkoField(scale)],
                           ),
                         ),
                       ),

@@ -191,6 +191,7 @@ class _MinersWheelOfFortuneScreenState extends State<MinersWheelOfFortuneScreen>
   void initState() {
     super.initState();
     unawaited(AnalyticsService.reportGameStart(_gameName));
+    unawaited(AudioService.instance.ensureMinersWheelSpinLoaded());
     _idleSpinController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 24),
@@ -574,6 +575,9 @@ class _MinersWheelOfFortuneScreenState extends State<MinersWheelOfFortuneScreen>
     if (haptic) HapticFeedback.selectionClick();
   }
 
+  static const _holdSteps = [50, 100, 500, 1000, 10000, 100000];
+  static const _holdStepIntervalMs = 800;
+
   void _startContinuousBetAdjust(int delta) {
     _adjustTimer?.cancel();
     _activeDelta = delta;
@@ -650,7 +654,6 @@ class _MinersWheelOfFortuneScreenState extends State<MinersWheelOfFortuneScreen>
     _ballEndAngle = _targetBallPocketAngle(winningNumber, _spinRouletteEnd);
 
     if (mounted) setState(() {});
-    unawaited(AudioService.instance.playWheelSpin(6400));
     await _spinController.forward();
   }
 
@@ -659,13 +662,12 @@ class _MinersWheelOfFortuneScreenState extends State<MinersWheelOfFortuneScreen>
     if (_selectedZones.isEmpty) return;
     final totalBet = _bet * _selectedZones.length;
     if (_bet <= 0 || _balance < totalBet) {
-      showWarningSnackBar(
-        context,
-        'Not enough coins to start the game.',
-      );
+      showWarningSnackBar(context, 'Not enough coins to start the game.');
       return;
     }
 
+    unawaited(AudioService.instance.playButtonClick());
+    unawaited(AudioService.instance.playWheelSpin(6400));
     final betToUse = _bet;
     final selectedSnapshot = Set<RouletteBetKey>.from(_selectedZones);
     final shouldAutoRepeat = _autoSpin;
@@ -742,12 +744,11 @@ class _MinersWheelOfFortuneScreenState extends State<MinersWheelOfFortuneScreen>
                         fit: BoxFit.fill,
                         width: panelWidth,
                         height: 85 * scale,
-                        errorBuilder: (context, error, stackTrace) =>
-                            Container(
-                              color: const Color(0x8850271C),
-                              width: panelWidth,
-                              height: 85 * scale,
-                            ),
+                        errorBuilder: (context, error, stackTrace) => Container(
+                          color: const Color(0x8850271C),
+                          width: panelWidth,
+                          height: 85 * scale,
+                        ),
                       ),
                       Padding(
                         padding: EdgeInsets.only(top: 2 * scale),
@@ -1193,18 +1194,20 @@ class _MinersWheelOfFortuneScreenState extends State<MinersWheelOfFortuneScreen>
               SafeArea(
                 child: SingleChildScrollView(
                   physics: const NeverScrollableScrollPhysics(),
-                  padding: EdgeInsets.only(bottom: 16 * scale),
+                  padding: EdgeInsets.only(
+                    bottom: MediaQuery.of(context).padding.bottom + 12 * scale,
+                  ),
                   child: Column(
                     children: [
                       SizedBox(height: 8 * scale),
                       _buildTopBar(scale),
-                      SizedBox(height: 12 * scale),
+                      SizedBox(height: 8 * scale),
                       _buildYouWinBanner(scale),
-                      SizedBox(height: 8 * scale),
+                      SizedBox(height: 4 * scale),
                       _buildWheelOfFortune(scale),
-                      SizedBox(height: 8 * scale),
+                      SizedBox(height: 4 * scale),
                       _buildPoleWithOverlay(scale),
-                      SizedBox(height: 12 * scale),
+                      SizedBox(height: 4 * scale),
                       _buildBottomBlock(scale),
                     ],
                   ),

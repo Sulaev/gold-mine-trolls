@@ -40,6 +40,9 @@ class _CautiousMinerScreenState extends State<CautiousMinerScreen>
   late final AnimationController _notificationController;
   late final AnimationController _winCountController;
   Timer? _winOverlayAutoHideTimer;
+  Timer? _adjustTimer;
+  Stopwatch? _adjustWatch;
+  final int _activeDelta = 0;
 
   int _balance = 0;
   int _displayBalance = 0;
@@ -69,29 +72,33 @@ class _CautiousMinerScreenState extends State<CautiousMinerScreen>
   void initState() {
     super.initState();
     unawaited(AnalyticsService.reportGameStart(_gameName));
-    _balanceCountController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 520),
-    )..addListener(() {
-      if (!mounted) return;
-      final t = Curves.easeOutCubic.transform(_balanceCountController.value);
-      final next = (_balanceAnimFrom + (_balance - _balanceAnimFrom) * t)
-          .round();
-      if (next == _displayBalance) return;
-      setState(() => _displayBalance = next);
-    });
+    _balanceCountController =
+        AnimationController(
+          vsync: this,
+          duration: const Duration(milliseconds: 520),
+        )..addListener(() {
+          if (!mounted) return;
+          final t = Curves.easeOutCubic.transform(
+            _balanceCountController.value,
+          );
+          final next = (_balanceAnimFrom + (_balance - _balanceAnimFrom) * t)
+              .round();
+          if (next == _displayBalance) return;
+          setState(() => _displayBalance = next);
+        });
     _notificationController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 250),
     );
-    _winCountController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1400),
-    )..addListener(() {
-      if (!mounted || !_isWinOverlayVisible) return;
-      final t = Curves.easeOutCubic.transform(_winCountController.value);
-      setState(() => _overlayAnimatedWin = (_overlayTargetWin * t).round());
-    });
+    _winCountController =
+        AnimationController(
+          vsync: this,
+          duration: const Duration(milliseconds: 1400),
+        )..addListener(() {
+          if (!mounted || !_isWinOverlayVisible) return;
+          final t = Curves.easeOutCubic.transform(_winCountController.value);
+          setState(() => _overlayAnimatedWin = (_overlayTargetWin * t).round());
+        });
     _generateMinefield();
     BalanceService.balanceNotifier.addListener(_onBalanceNotifierChanged);
     _loadBalance();
@@ -112,6 +119,8 @@ class _CautiousMinerScreenState extends State<CautiousMinerScreen>
 
   @override
   void dispose() {
+    _adjustTimer?.cancel();
+    _adjustWatch?.stop();
     BalanceService.balanceNotifier.removeListener(_onBalanceNotifierChanged);
     _winOverlayAutoHideTimer?.cancel();
     _adjustTimer?.cancel();
@@ -167,25 +176,24 @@ class _CautiousMinerScreenState extends State<CautiousMinerScreen>
       barrierLabel: 'Close info',
       barrierColor: const Color(0x80000000),
       transitionDuration: const Duration(milliseconds: 200),
-      pageBuilder: (context, animation, secondaryAnimation) =>
-          InfoScreen(
-            content: Padding(
-              padding: const EdgeInsets.only(top: 70, left: 40, right: 40),
-              child: SingleChildScrollView(
-                child: Text(
-                  'Get ready to test your intuition in this round! Your goal is to find safe tiles and avoid hitting a mine.\n'
-                  'In front of you is a grid of hidden tiles. Each tile may contain a prize in the form of Golden Trolls Coins.\n'
-                  'Your move: Tap any tile to make your choice.\n'
-                  'If the tile lights up and Golden Trolls Coins appear - you win! Your current winnings increase, and you can either continue or cash out.\n'
-                  'If you hit a mine - the round is over and your entire bet is lost.\n'
-                  'With each correct pick in a row, your multiplier grows rapidly.\n'
-                  'You can cash out your accumulated winnings in Golden Trolls Coins at any time before hitting a mine.',
-                  textAlign: TextAlign.center,
-                  style: InfoScreen.mainTextStyle(),
-                ),
-              ),
+      pageBuilder: (context, animation, secondaryAnimation) => InfoScreen(
+        content: Padding(
+          padding: const EdgeInsets.only(top: 70, left: 40, right: 40),
+          child: SingleChildScrollView(
+            child: Text(
+              'Get ready to test your intuition in this round! Your goal is to find safe tiles and avoid hitting a mine.\n'
+              'In front of you is a grid of hidden tiles. Each tile may contain a prize in the form of Golden Trolls Coins.\n'
+              'Your move: Tap any tile to make your choice.\n'
+              'If the tile lights up and Golden Trolls Coins appear - you win! Your current winnings increase, and you can either continue or cash out.\n'
+              'If you hit a mine - the round is over and your entire bet is lost.\n'
+              'With each correct pick in a row, your multiplier grows rapidly.\n'
+              'You can cash out your accumulated winnings in Golden Trolls Coins at any time before hitting a mine.',
+              textAlign: TextAlign.center,
+              style: InfoScreen.mainTextStyle(),
             ),
           ),
+        ),
+      ),
     );
   }
 
@@ -244,7 +252,7 @@ class _CautiousMinerScreenState extends State<CautiousMinerScreen>
     final next = (_bet + delta).clamp(_minBet, _balance);
     if (next == _bet) return;
     setState(() => _bet = next);
-    await BalanceService.setLastBet(_bet);
+    unawaited(BalanceService.setLastBet(_bet));
     unawaited(AnalyticsService.reportBetChange(_gameName, _bet));
     if (haptic) HapticFeedback.selectionClick();
   }
@@ -258,7 +266,9 @@ class _CautiousMinerScreenState extends State<CautiousMinerScreen>
       var factor = 3;
       if (elapsed >= 800 && elapsed < 2000) factor = 6;
       if (elapsed >= 2000) factor = 12;
-      unawaited(_applyBetDelta(_activeDelta * _betStep * factor, haptic: false));
+      unawaited(
+        _applyBetDelta(_activeDelta * _betStep * factor, haptic: false),
+      );
     });
   }
 
@@ -272,10 +282,7 @@ class _CautiousMinerScreenState extends State<CautiousMinerScreen>
   Future<void> _startRun() async {
     if (_loadingBalance || _inRun || _isGameOver) return;
     if (_bet <= 0 || _balance < _bet) {
-      showWarningSnackBar(
-        context,
-        'Not enough coins to start the game.',
-      );
+      showWarningSnackBar(context, 'Not enough coins to start the game.');
       return;
     }
     final nextBalance = _balance - _bet;
@@ -597,7 +604,8 @@ class _CautiousMinerScreenState extends State<CautiousMinerScreen>
   }
 
   Widget _buildGrid(double scale) {
-    final boardWidth = _cols * _cellSize * scale + (_cols - 1) * _cellGap * scale;
+    final boardWidth =
+        _cols * _cellSize * scale + (_cols - 1) * _cellGap * scale;
     return SizedBox(
       width: boardWidth,
       child: Column(
@@ -776,10 +784,9 @@ class _CautiousMinerScreenState extends State<CautiousMinerScreen>
     return Scaffold(
       body: LayoutBuilder(
         builder: (context, constraints) {
-          final scale = math.min(
-            constraints.maxWidth / 390,
-            constraints.maxHeight / 844,
-          ).clamp(0.82, 1.3);
+          final scale = math
+              .min(constraints.maxWidth / 390, constraints.maxHeight / 844)
+              .clamp(0.82, 1.3);
           return Stack(
             children: [
               Positioned.fill(
@@ -804,7 +811,9 @@ class _CautiousMinerScreenState extends State<CautiousMinerScreen>
                     ),
                     if (!_isGameOver)
                       Padding(
-                        padding: EdgeInsets.only(bottom: 12 * scale),
+                        padding: EdgeInsets.only(
+                          bottom: (12 * scale - 2).clamp(4.0, 20.0),
+                        ),
                         child: _buildBottomControls(scale),
                       ),
                   ],
@@ -861,9 +870,7 @@ class _CautiousMinerScreenState extends State<CautiousMinerScreen>
               if (_isWinOverlayVisible)
                 Positioned.fill(
                   child: IgnorePointer(
-                    child: Center(
-                      child: _buildWinOverlay(scale),
-                    ),
+                    child: Center(child: _buildWinOverlay(scale)),
                   ),
                 ),
             ],

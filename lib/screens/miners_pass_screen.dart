@@ -5,10 +5,7 @@ import 'package:gold_mine_trolls/services/analytics_service.dart';
 import 'package:gold_mine_trolls/widgets/pressable_button.dart';
 
 class MinersPassScreen extends StatefulWidget {
-  const MinersPassScreen({
-    super.key,
-    required this.source,
-  });
+  const MinersPassScreen({super.key, required this.source});
 
   final String source;
 
@@ -17,14 +14,14 @@ class MinersPassScreen extends StatefulWidget {
 }
 
 class _MinersPassScreenState extends State<MinersPassScreen> {
-  static const _topPadding = 24.0;
-  static const _headerTop = 47.0 + _topPadding;
+  static const _topPadding = 16.0;
+  static const _headerTop = 40.0 + _topPadding;
   static const _closeBtnSize = 38.0;
   static const _closeBtnLeftMargin = 16.0;
-  static const _titleWidth = 320.0;
-  static const _titleHeight = 111.0;
+  static const _titleWidth = 300.0;
+  static const _titleHeight = 90.0;
   static const _bannerWidth = 264.0;
-  static const _bannerHeight = 65.0;
+  static const _bannerHeight = 54.0;
 
   @override
   void initState() {
@@ -40,19 +37,16 @@ class _MinersPassScreenState extends State<MinersPassScreen> {
 
   Future<void> _onPlanTap(String itemId) async {
     HapticFeedback.lightImpact();
-    await AnalyticsService.reportPurchaseClick(
-      itemId: itemId,
-      type: 'sub',
-    );
+    await AnalyticsService.reportPurchaseClick(itemId: itemId, type: 'sub');
   }
 
   TextStyle _topTextStyle({Color? color, Paint? foreground}) {
     return const TextStyle(
       fontFamily: 'Gilroy',
       fontWeight: FontWeight.w900,
-      fontSize: 16.82,
-      height: 1.6,
-      letterSpacing: -0.02 * 16.82,
+      fontSize: 13.5,
+      height: 1.35,
+      letterSpacing: -0.02 * 13.5,
       color: Colors.white,
     ).copyWith(
       color: foreground == null ? color : null,
@@ -64,9 +58,9 @@ class _MinersPassScreenState extends State<MinersPassScreen> {
     return const TextStyle(
       fontFamily: 'Gilroy',
       fontWeight: FontWeight.w900,
-      fontSize: 22.36,
-      height: 1.6,
-      letterSpacing: -0.02 * 22.36,
+      fontSize: 16.5,
+      height: 1.35,
+      letterSpacing: -0.02 * 16.5,
       color: Colors.white,
     ).copyWith(
       color: foreground == null ? color : null,
@@ -104,10 +98,7 @@ class _MinersPassScreenState extends State<MinersPassScreen> {
     return SizedBox(
       width: _bannerWidth,
       height: _bannerHeight,
-      child: Image.asset(
-        assetPath,
-        fit: BoxFit.contain,
-      ),
+      child: Image.asset(assetPath, fit: BoxFit.contain),
     );
   }
 
@@ -122,23 +113,21 @@ class _MinersPassScreenState extends State<MinersPassScreen> {
       onTap: () => _onPlanTap(itemId),
       child: SizedBox(
         width: width,
-        height: 70,
+        height: 58,
         child: Stack(
           fit: StackFit.expand,
           alignment: Alignment.center,
           children: [
-            Image.asset(
-              assetPath,
-              fit: BoxFit.fill,
-            ),
+            Image.asset(assetPath, fit: BoxFit.fill),
             Padding(
-              padding: const EdgeInsets.only(top: 3),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   _outlinedText(topText, styleBuilder: _topTextStyle),
                   Transform.translate(
-                    offset: const Offset(0, -4),
+                    offset: const Offset(0, -2),
                     child: _outlinedText(
                       bottomText,
                       styleBuilder: _bottomTextStyle,
@@ -157,8 +146,8 @@ class _MinersPassScreenState extends State<MinersPassScreen> {
     const baseStyle = TextStyle(
       fontFamily: 'Gothic A1',
       fontWeight: FontWeight.w400,
-      fontSize: 12,
-      height: 1.6,
+      fontSize: 10.5,
+      height: 1.4,
       color: Color(0xFFFFFFFF),
     );
     const underline = TextDecoration.underline;
@@ -168,8 +157,7 @@ class _MinersPassScreenState extends State<MinersPassScreen> {
         style: baseStyle,
         children: [
           TextSpan(
-            text:
-                'BECOME A VIP TODAY AND ENJOY THE GAME LIKE NEVER BEFORE! ',
+            text: 'BECOME A VIP TODAY AND ENJOY THE GAME LIKE NEVER BEFORE! ',
           ),
           TextSpan(text: '✨ '),
           TextSpan(
@@ -194,9 +182,9 @@ class _MinersPassScreenState extends State<MinersPassScreen> {
       style: const TextStyle(
         fontFamily: 'Gotham',
         fontWeight: FontWeight.w900,
-        fontSize: 17.49,
-        height: 1.6,
-        letterSpacing: -0.02 * 17.49,
+        fontSize: 14,
+        height: 1.4,
+        letterSpacing: -0.02 * 14,
         decoration: TextDecoration.underline,
         color: Colors.white,
       ),
@@ -234,41 +222,41 @@ class _MinersPassScreenState extends State<MinersPassScreen> {
                     _buildOfferTitle('assets/images/paywall/ex_title2.png'),
                     _buildOfferTitle('assets/images/paywall/ex_title3.png'),
                     const SizedBox(height: 10),
-                  _buildBuyButton(
-                    assetPath: 'assets/images/paywall/buy_btn_green.png',
-                    width: 200,
-                    topText: '1 MONTH \$9.99',
-                    bottomText: '+ 100,000 COINS',
-                    itemId: 'miners_pass_1_month',
-                  ),
-                  const SizedBox(height: 8),
-                  _buildBuyButton(
-                    assetPath: 'assets/images/paywall/buy_btn_green.png',
-                    width: 200,
-                    topText: '3 MONTH \$29.99',
-                    bottomText: '+ 350,000 COINS',
-                    itemId: 'miners_pass_3_month',
-                  ),
-                  const SizedBox(height: 8),
-                  _buildBuyButton(
-                    assetPath: 'assets/images/paywall/buy_btn_green.png',
-                    width: 200,
-                    topText: '6 MONTH \$49.99',
-                    bottomText: '+ 650,000 COINS',
-                    itemId: 'miners_pass_6_month',
-                  ),
-                  const SizedBox(height: 10),
-                  _buildBuyButton(
-                    assetPath: 'assets/images/paywall/buy_btn_yelow.png',
-                    width: 237,
-                    topText: '12 MONTH \$69.99',
-                    bottomText: '+ 1,500,000 COINS',
-                    itemId: 'miners_pass_12_month',
-                  ),
-                  const SizedBox(height: 12),
-                  _buildFooterCopy(),
-                  const SizedBox(height: 10),
-                  _buildRestorePurchases(),
+                    _buildBuyButton(
+                      assetPath: 'assets/images/paywall/buy_btn_green.png',
+                      width: 200,
+                      topText: '1 MONTH \$9.99',
+                      bottomText: '+ 100,000 COINS',
+                      itemId: 'miners_pass_1_month',
+                    ),
+                    const SizedBox(height: 5),
+                    _buildBuyButton(
+                      assetPath: 'assets/images/paywall/buy_btn_green.png',
+                      width: 200,
+                      topText: '3 MONTH \$29.99',
+                      bottomText: '+ 350,000 COINS',
+                      itemId: 'miners_pass_3_month',
+                    ),
+                    const SizedBox(height: 5),
+                    _buildBuyButton(
+                      assetPath: 'assets/images/paywall/buy_btn_green.png',
+                      width: 200,
+                      topText: '6 MONTH \$49.99',
+                      bottomText: '+ 650,000 COINS',
+                      itemId: 'miners_pass_6_month',
+                    ),
+                    const SizedBox(height: 6),
+                    _buildBuyButton(
+                      assetPath: 'assets/images/paywall/buy_btn_yelow.png',
+                      width: 237,
+                      topText: '12 MONTH \$69.99',
+                      bottomText: '+ 1,500,000 COINS',
+                      itemId: 'miners_pass_12_month',
+                    ),
+                    const SizedBox(height: 6),
+                    _buildFooterCopy(),
+                    const SizedBox(height: 6),
+                    _buildRestorePurchases(),
                   ],
                 ),
               ),
@@ -280,19 +268,19 @@ class _MinersPassScreenState extends State<MinersPassScreen> {
             child: Material(
               type: MaterialType.transparency,
               child: PressableButton(
-              onTap: () {
-                HapticFeedback.lightImpact();
-                Navigator.of(context).pop();
-              },
-              child: SizedBox(
-                width: _closeBtnSize,
-                height: _closeBtnSize,
-                child: Image.asset(
-                  'assets/images/shop/btn_close.png',
-                  fit: BoxFit.contain,
+                onTap: () {
+                  HapticFeedback.lightImpact();
+                  Navigator.of(context).pop();
+                },
+                child: SizedBox(
+                  width: _closeBtnSize,
+                  height: _closeBtnSize,
+                  child: Image.asset(
+                    'assets/images/shop/btn_close.png',
+                    fit: BoxFit.contain,
+                  ),
                 ),
               ),
-            ),
             ),
           ),
         ],

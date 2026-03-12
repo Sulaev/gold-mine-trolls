@@ -822,9 +822,9 @@ class _CardMine21ScreenState extends State<CardMine21Screen>
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        // Dealer label
+        // Dealer label (sum of cards)
         SizedBox(
-          width: 140 * scale,
+          width: 180 * scale,
           height: labelH,
           child: Center(
             child: _buildTableLabel(
@@ -882,14 +882,14 @@ class _CardMine21ScreenState extends State<CardMine21Screen>
           ),
         ),
         SizedBox(height: 20 * scale),
-        // Player label
+        // Player label (sum of cards like dealer)
         SizedBox(
-          width: 140 * scale,
+          width: 180 * scale,
           height: labelH,
           child: Center(
             child: _buildTableLabel(
               _game.playerHand.isEmpty
-                  ? 'YOU CARD:'
+                  ? 'YOU CARD: 0'
                   : 'YOU CARD: ${_game.playerValue}',
               scale,
             ),

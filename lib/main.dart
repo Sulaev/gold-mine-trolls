@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'screens/launch_screen.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'screens/onboarding_screen.dart';
 import 'services/analytics_service.dart';
 import 'services/audio_service.dart';
 import 'services/balance_service.dart';
@@ -22,6 +24,12 @@ Future<void> main() async {
   await AnalyticsService.init();
   await BalanceService.init();
   await SettingsService.init();
+
+  // Preload text fonts so styles apply immediately, not when text first appears
+  await GoogleFonts.pendingFonts(<TextStyle>[
+    GoogleFonts.montserrat(),
+    GoogleFonts.gothicA1(),
+  ]);
 
   runApp(const GoldMineTrollsApp());
 }
