@@ -90,6 +90,29 @@ class BlackjackGame {
     // Dealer 21: let player try to hit 21 before resolving
   }
 
+  /// Deal 2 cards to dealer only (for pre-start display).
+  void dealDealerOnly() {
+    dealerHand.clear();
+    playerHand.clear();
+    dealerHand.add(_draw());
+    dealerHand.add(_drawForInitialHand(dealerHand));
+    phase = BlackjackPhase.dealing;
+  }
+
+  /// Deal 2 cards to player (dealer already has 2). Completes initial deal.
+  void dealPlayerOnly() {
+    assert(dealerHand.length == 2 && playerHand.isEmpty);
+    playerHand.add(_draw());
+    playerHand.add(_drawForInitialHand(playerHand));
+    phase = BlackjackPhase.playerTurn;
+
+    if (playerValue == 21 && dealerValue == 21) {
+      phase = BlackjackPhase.push;
+    } else if (playerValue == 21) {
+      phase = BlackjackPhase.playerWin;
+    }
+  }
+
   void hit() {
     if (phase != BlackjackPhase.playerTurn) return;
     playerHand.add(_draw());
@@ -130,6 +153,11 @@ class BlackjackGame {
 
   bool get dealerNeedsToDraw =>
       phase == BlackjackPhase.dealerTurn && dealerValue < 17;
+
+  /// Reset to empty hands with fresh deck, ready for deal.
+  void resetForNewGame() {
+    _newRound();
+  }
 
   void startNewRound() {
     _newRound();

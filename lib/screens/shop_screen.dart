@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:gold_mine_trolls/screens/miners_pass_screen.dart';
 import 'package:gold_mine_trolls/services/analytics_service.dart';
 import 'package:gold_mine_trolls/services/balance_service.dart';
+import 'package:gold_mine_trolls/services/settings_service.dart';
 import 'package:gold_mine_trolls/widgets/shop_element_card.dart';
 import 'package:gold_mine_trolls/widgets/pressable_button.dart';
 import 'package:gold_mine_trolls/widgets/tap_banner.dart';
@@ -23,17 +24,18 @@ class ShopScreen extends StatefulWidget {
 class _ShopScreenState extends State<ShopScreen> {
   bool _purchaseMade = false;
 
+  static const _scale = 0.917; // 0.873 * 1.05 — всё кроме кнопки закрыть увеличено на 5%
   static const _topPadding = 24.0;
-  static const _shopTitleTop = 47.0 + _topPadding;
-  static const _shopTitleWidth = 75.0;
-  static const _shopTitleHeight = 42.0;
+  static double get _shopTitleTop => (47.0 + _topPadding) * _scale;
+  static double get _shopTitleWidth => 75.0 * _scale;
+  static double get _shopTitleHeight => 42.0 * _scale;
   static const _closeBtnSize = 38.0;
-  static const _closeBtnRightMargin = 16.0;
-  static const _elementsTop = 110.0 + _topPadding;
-  static const _elementGap = -28.0;
-  static const _bannerGap = -120.0;
-  static const _bannerWidth = 311.0;
-  static const _bannerHeight = 160.0;
+  static const _closeBtnRightMargin = 16.0; // не масштабируется — кнопка закрыть фиксирована
+  static double get _elementsTop => (110.0 + _topPadding) * _scale;
+  static double get _elementGap => -28.0 * _scale;
+  static double get _bannerGap => -120.0 * _scale;
+  static double get _bannerWidth => 311.0 * _scale;
+  static double get _bannerHeight => 160.0 * _scale;
 
   static const _coinOffers = [
     ('coins_100000', 100000, 0.0),
@@ -82,7 +84,7 @@ class _ShopScreenState extends State<ShopScreen> {
                       'SHOP',
                       style: TextStyle(
                         color: Colors.amber,
-                        fontSize: 20,
+                        fontSize: 20 * _scale,
                         fontWeight: FontWeight.w900,
                       ),
                     ),
@@ -95,7 +97,7 @@ class _ShopScreenState extends State<ShopScreen> {
               right: _closeBtnRightMargin,
               child: PressableButton(
                 onTap: () {
-                  HapticFeedback.lightImpact();
+                  SettingsService.hapticLightImpact();
                   Navigator.of(context).pop();
                 },
                 child: SizedBox(
@@ -121,7 +123,8 @@ class _ShopScreenState extends State<ShopScreen> {
               right: 0,
               bottom: 0,
               child: SingleChildScrollView(
-                padding: EdgeInsets.zero,
+                physics: const NeverScrollableScrollPhysics(),
+                padding: const EdgeInsets.only(bottom: 70),
                 child: Center(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
@@ -132,10 +135,10 @@ class _ShopScreenState extends State<ShopScreen> {
                           offset: Offset(0, i > 0 ? _elementGap * i : 0),
                           child: ShopElementCard(
                             coins: _coinOffers[i].$2,
-                            contentTopOffset: i == 4 ? 10 : 0,
+                            contentTopOffset: i == 4 ? 3 : 0,
                             showOnlyForYouBanner: i == 4,
                             onBuyTap: () async {
-                              HapticFeedback.lightImpact();
+                              SettingsService.hapticLightImpact();
                               final itemId = _coinOffers[i].$1;
                               final amount = _coinOffers[i].$2;
                               final price = _coinOffers[i].$3;
@@ -186,9 +189,47 @@ class _ShopScreenState extends State<ShopScreen> {
                 ),
               ),
             ),
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: SafeArea(
+                top: false,
+                child: Padding(
+                  padding: EdgeInsets.only(bottom: 16 * _scale),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        'Privacy policy',
+                        style: _shopFooterLinkStyle(),
+                      ),
+                      SizedBox(width: 16 * _scale),
+                      Text(
+                        'Terms of Use',
+                        style: _shopFooterLinkStyle(),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
           ],
         ),
       ),
+    );
+  }
+
+  static TextStyle _shopFooterLinkStyle() {
+    return TextStyle(
+      fontFamily: 'Gotham',
+      fontWeight: FontWeight.w900,
+      fontSize: 18 * _scale,
+      height: 1.4,
+      letterSpacing: -0.36 * _scale,
+      decoration: TextDecoration.underline,
+      decorationColor: Colors.white,
+      color: Colors.white,
     );
   }
 }

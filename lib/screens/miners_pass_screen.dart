@@ -14,14 +14,15 @@ class MinersPassScreen extends StatefulWidget {
 }
 
 class _MinersPassScreenState extends State<MinersPassScreen> {
-  static const _topPadding = 16.0;
-  static const _headerTop = 40.0 + _topPadding;
-  static const _closeBtnSize = 38.0;
-  static const _closeBtnLeftMargin = 16.0;
-  static const _titleWidth = 300.0;
-  static const _titleHeight = 90.0;
-  static const _bannerWidth = 264.0;
-  static const _bannerHeight = 54.0;
+  static const _scale = 1.14; // 1.2 * 0.95 — уменьшено на 5%
+  static double get _topPadding => 16.0 * _scale;
+  static double get _headerTop => (40.0 + 16.0) * _scale;
+  static double get _closeBtnSize => 38.0 * _scale;
+  static double get _closeBtnLeftMargin => 16.0 * _scale;
+  static double get _titleWidth => 300.0 * _scale;
+  static double get _titleHeight => 90.0 * _scale;
+  static double get _bannerWidth => 264.0 * _scale;
+  static double get _bannerHeight => 54.0 * _scale;
 
   @override
   void initState() {
@@ -40,27 +41,15 @@ class _MinersPassScreenState extends State<MinersPassScreen> {
     await AnalyticsService.reportPurchaseClick(itemId: itemId, type: 'sub');
   }
 
-  TextStyle _topTextStyle({Color? color, Paint? foreground}) {
-    return const TextStyle(
-      fontFamily: 'Gilroy',
-      fontWeight: FontWeight.w900,
-      fontSize: 13.5,
-      height: 1.35,
-      letterSpacing: -0.02 * 13.5,
-      color: Colors.white,
-    ).copyWith(
-      color: foreground == null ? color : null,
-      foreground: foreground,
-    );
-  }
+  static const _buttonTextSize = 16.0;
 
-  TextStyle _bottomTextStyle({Color? color, Paint? foreground}) {
-    return const TextStyle(
+  TextStyle _buttonTextStyle({Color? color, Paint? foreground}) {
+    return TextStyle(
       fontFamily: 'Gilroy',
       fontWeight: FontWeight.w900,
-      fontSize: 16.5,
+      fontSize: _buttonTextSize * _scale,
       height: 1.35,
-      letterSpacing: -0.02 * 16.5,
+      letterSpacing: -0.02 * _buttonTextSize * _scale,
       color: Colors.white,
     ).copyWith(
       color: foreground == null ? color : null,
@@ -78,10 +67,10 @@ class _MinersPassScreenState extends State<MinersPassScreen> {
         Text(
           text,
           textAlign: TextAlign.center,
-          style: styleBuilder(
+          style:           styleBuilder(
             foreground: Paint()
               ..style = PaintingStyle.stroke
-              ..strokeWidth = styleBuilder == _topTextStyle ? 0.7 : 0.93
+              ..strokeWidth = 0.93
               ..color = const Color(0x4070AC17),
           ),
         ),
@@ -113,27 +102,30 @@ class _MinersPassScreenState extends State<MinersPassScreen> {
       onTap: () => _onPlanTap(itemId),
       child: SizedBox(
         width: width,
-        height: 58,
+        height: 58 * _scale,
         child: Stack(
           fit: StackFit.expand,
           alignment: Alignment.center,
           children: [
             Image.asset(assetPath, fit: BoxFit.fill),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _outlinedText(topText, styleBuilder: _topTextStyle),
-                  Transform.translate(
-                    offset: const Offset(0, -2),
-                    child: _outlinedText(
-                      bottomText,
-                      styleBuilder: _bottomTextStyle,
+            Transform.translate(
+              offset: const Offset(0, 4),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _outlinedText(topText, styleBuilder: _buttonTextStyle),
+                    Transform.translate(
+                      offset: const Offset(0, -2),
+                      child: _outlinedText(
+                        bottomText,
+                        styleBuilder: _buttonTextStyle,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ],
@@ -142,52 +134,45 @@ class _MinersPassScreenState extends State<MinersPassScreen> {
     );
   }
 
-  Widget _buildFooterCopy() {
-    const baseStyle = TextStyle(
-      fontFamily: 'Gothic A1',
-      fontWeight: FontWeight.w400,
-      fontSize: 10.5,
+  static TextStyle _footerLinkStyle() {
+    return TextStyle(
+      fontFamily: 'Gotham',
+      fontWeight: FontWeight.w900,
+      fontSize: 14 * _scale,
       height: 1.4,
-      color: Color(0xFFFFFFFF),
-    );
-    const underline = TextDecoration.underline;
-
-    return Text.rich(
-      const TextSpan(
-        style: baseStyle,
-        children: [
-          TextSpan(
-            text: 'BECOME A VIP TODAY AND ENJOY THE GAME LIKE NEVER BEFORE! ',
-          ),
-          TextSpan(text: '✨ '),
-          TextSpan(
-            text: 'Terms of Use',
-            style: TextStyle(decoration: underline),
-          ),
-          TextSpan(text: ' & '),
-          TextSpan(
-            text: 'Privacy policy',
-            style: TextStyle(decoration: underline),
-          ),
-        ],
-      ),
-      textAlign: TextAlign.center,
+      letterSpacing: -0.02 * 14 * _scale,
+      decoration: TextDecoration.underline,
+      decorationColor: Colors.white,
+      color: Colors.white,
     );
   }
 
-  Widget _buildRestorePurchases() {
+  Widget _buildFooterCopy() {
+    final baseStyle = TextStyle(
+      fontFamily: 'Gothic A1',
+      fontWeight: FontWeight.w400,
+      fontSize: 10.5 * _scale,
+      height: 1.4,
+      color: const Color(0xFFFFFFFF),
+    );
+
     return Text(
-      'RESTORE PURCHASES',
+      'BECOME A VIP TODAY AND ENJOY THE GAME LIKE NEVER BEFORE! ✨',
       textAlign: TextAlign.center,
-      style: const TextStyle(
-        fontFamily: 'Gotham',
-        fontWeight: FontWeight.w900,
-        fontSize: 14,
-        height: 1.4,
-        letterSpacing: -0.02 * 14,
-        decoration: TextDecoration.underline,
-        color: Colors.white,
-      ),
+      style: baseStyle,
+    );
+  }
+
+  Widget _buildRestoreRow() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Text('Terms of Use', style: _footerLinkStyle()),
+        SizedBox(width: 16 * _scale),
+        Text('RESTORE', style: _footerLinkStyle()),
+        SizedBox(width: 16 * _scale),
+        Text('Privacy policy', style: _footerLinkStyle()),
+      ],
     );
   }
 
@@ -205,7 +190,7 @@ class _MinersPassScreenState extends State<MinersPassScreen> {
           ),
           SafeArea(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(24, 44, 24, 16),
+              padding: EdgeInsets.fromLTRB(24 * _scale, 44 * _scale, 24 * _scale, 120 * _scale),
               child: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -221,42 +206,50 @@ class _MinersPassScreenState extends State<MinersPassScreen> {
                     _buildOfferTitle('assets/images/paywall/ex_title1.png'),
                     _buildOfferTitle('assets/images/paywall/ex_title2.png'),
                     _buildOfferTitle('assets/images/paywall/ex_title3.png'),
-                    const SizedBox(height: 10),
+                    SizedBox(height: 10 * _scale),
                     _buildBuyButton(
                       assetPath: 'assets/images/paywall/buy_btn_green.png',
-                      width: 200,
-                      topText: '1 MONTH \$9.99',
+                      width: 200 * _scale,
+                      topText: '1 WEEK \$9.99',
+                      bottomText: '+ 50,000 COINS',
+                      itemId: 'miners_pass_1_week',
+                    ),
+                    SizedBox(height: 10 * _scale),
+                    _buildBuyButton(
+                      assetPath: 'assets/images/paywall/buy_btn_green.png',
+                      width: 200 * _scale,
+                      topText: '1 MONTH \$19.99',
                       bottomText: '+ 100,000 COINS',
                       itemId: 'miners_pass_1_month',
                     ),
-                    const SizedBox(height: 5),
+                    SizedBox(height: 10 * _scale),
                     _buildBuyButton(
-                      assetPath: 'assets/images/paywall/buy_btn_green.png',
-                      width: 200,
-                      topText: '3 MONTH \$29.99',
+                      assetPath: 'assets/images/paywall/buy_btn_yelow.png',
+                      width: 237 * _scale,
+                      topText: '3 MONTH \$39.99',
                       bottomText: '+ 350,000 COINS',
                       itemId: 'miners_pass_3_month',
                     ),
-                    const SizedBox(height: 5),
-                    _buildBuyButton(
-                      assetPath: 'assets/images/paywall/buy_btn_green.png',
-                      width: 200,
-                      topText: '6 MONTH \$49.99',
-                      bottomText: '+ 650,000 COINS',
-                      itemId: 'miners_pass_6_month',
-                    ),
-                    const SizedBox(height: 6),
-                    _buildBuyButton(
-                      assetPath: 'assets/images/paywall/buy_btn_yelow.png',
-                      width: 237,
-                      topText: '12 MONTH \$69.99',
-                      bottomText: '+ 1,500,000 COINS',
-                      itemId: 'miners_pass_12_month',
-                    ),
-                    const SizedBox(height: 6),
+                    SizedBox(height: 6 * _scale),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: SafeArea(
+              top: false,
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(24 * _scale, 12 * _scale, 24 * _scale, 16 * _scale),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
                     _buildFooterCopy(),
-                    const SizedBox(height: 6),
-                    _buildRestorePurchases(),
+                    SizedBox(height: 6 * _scale),
+                    _buildRestoreRow(),
                   ],
                 ),
               ),

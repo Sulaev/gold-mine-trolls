@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:gold_mine_trolls/services/analytics_service.dart';
 import 'package:gold_mine_trolls/services/balance_service.dart';
+import 'package:gold_mine_trolls/services/settings_service.dart';
 import 'package:gold_mine_trolls/services/road_of_luck_service.dart';
 import 'package:gold_mine_trolls/widgets/pressable_button.dart';
 
@@ -88,7 +89,63 @@ class _RoadOfLuckScreenState extends State<RoadOfLuckScreen> {
 
   Future<void> _claimStep(int index) async {
     if (!_isActiveStep(index)) return;
-    HapticFeedback.lightImpact();
+    SettingsService.hapticLightImpact();
+    final price = _prices[index];
+    final isFree = price == 'FREE';
+
+    if (isFree) {
+      await _doClaim(index);
+      return;
+    }
+
+    // Платный шаг: показываем диалог покупки
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF2D2418),
+        title: Text(
+          'Purchase',
+          style: GoogleFonts.montserrat(
+            color: Colors.white,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+        content: Text(
+          'Buy this reward for $price?',
+          style: GoogleFonts.montserrat(
+            color: Colors.white70,
+            fontSize: 16,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text(
+              'Cancel',
+              style: GoogleFonts.montserrat(color: Colors.white70),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text(
+              'Buy',
+              style: GoogleFonts.montserrat(
+                color: _activeTextColor,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (!mounted || confirmed != true) return;
+    await _doClaim(index);
+  }
+
+  /// Забирает награду и переходит на следующий шаг (после покупки — автоматически).
+  Future<void> _doClaim(int index) async {
     final itemId = 'road_of_luck_step_${index + 1}';
     final price = _prices[index];
     setState(() => _processingPurchase = true);
@@ -169,7 +226,7 @@ class _RoadOfLuckScreenState extends State<RoadOfLuckScreen> {
                   right: _closeBtnRightMargin,
                   child: PressableButton(
                     onTap: () {
-                      HapticFeedback.lightImpact();
+                      SettingsService.hapticLightImpact();
                       Navigator.of(context).pop();
                     },
                     child: SizedBox(
@@ -353,7 +410,7 @@ class _RoadOfLuckScreenState extends State<RoadOfLuckScreen> {
             ),
           ),
           Positioned(
-            top: 32,
+            top: 32, // иконка и номинал выше на 3 px
             left: 0,
             right: 0,
             child: Row(
@@ -381,14 +438,17 @@ class _RoadOfLuckScreenState extends State<RoadOfLuckScreen> {
           ),
           Center(
             child: Transform.translate(
-              offset: const Offset(0, 10),
-              child: Image.asset(
-                'assets/images/road_of_luck/gold_bag.png',
-                fit: BoxFit.contain,
-                errorBuilder: (context, error, stackTrace) => Icon(
-                  Icons.money,
-                  size: 48,
-                  color: Colors.amber.shade700,
+              offset: const Offset(0, 15), // +3 px вниз
+              child: Transform.scale(
+                scale: 0.98, // на 2% меньше
+                child: Image.asset(
+                  'assets/images/road_of_luck/gold_bag.png',
+                  fit: BoxFit.contain,
+                  errorBuilder: (context, error, stackTrace) => Icon(
+                    Icons.money,
+                    size: 48,
+                    color: Colors.amber.shade700,
+                  ),
                 ),
               ),
             ),
@@ -425,7 +485,9 @@ class _RoadOfLuckScreenState extends State<RoadOfLuckScreen> {
         ),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-          child: Stack(
+          child: Transform.translate(
+            offset: const Offset(0, -2),
+            child: Stack(
             children: [
               Text(
                 price,
@@ -466,6 +528,7 @@ class _RoadOfLuckScreenState extends State<RoadOfLuckScreen> {
               ),
             ],
           ),
+        ),
         ),
       ],
     );

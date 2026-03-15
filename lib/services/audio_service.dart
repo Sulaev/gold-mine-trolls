@@ -77,11 +77,13 @@ class AudioService {
         ),
       );
 
-      await _bgPlayer.setAsset(_bgAsset);
-      await _bgPlayer.setLoopMode(LoopMode.one);
-      await _bgPlayer.setVolume(_bgVolume);
-      await _bgPlayer.setSpeed(1.0);
-      _bgInitialized = true;
+      if (!_bgInitialized) {
+        await _bgPlayer.setAsset(_bgAsset);
+        await _bgPlayer.setLoopMode(LoopMode.one);
+        await _bgPlayer.setVolume(_bgVolume);
+        await _bgPlayer.setSpeed(1.0);
+        _bgInitialized = true;
+      }
 
       if (!_clickLoaded) {
         await _clickPlayer.setAsset(_clickAsset);
@@ -273,14 +275,21 @@ class AudioService {
     } catch (_) {}
   }
 
+  /// Ensure miners wheel spin asset is loaded. Call before playWheelSpin if needed.
+  Future<void> ensureMinersWheelSpinLoaded() async {
+    if (_minersWheelSpinLoaded) return;
+    try {
+      await _minersWheelSpinPlayer.setAsset(_wheelSpinAsset);
+      _minersWheelSpinLoaded = true;
+    } catch (_) {}
+  }
+
   /// Play wheel spin (gumball_machine) and fade out over [durationMs].
   /// Call when miners wheel spin starts.
   Future<void> playWheelSpin(int durationMs) async {
     if (!SettingsService.soundEnabled) return;
     try {
-      if (!_minersWheelSpinLoaded) {
-        await ensureMinersWheelSpinLoaded();
-      }
+      await ensureMinersWheelSpinLoaded();
       await _minersWheelSpinPlayer.stop();
       await _minersWheelSpinPlayer.setVolume(1.0);
       await _minersWheelSpinPlayer.seek(Duration.zero);

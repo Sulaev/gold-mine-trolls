@@ -19,7 +19,6 @@ class OnboardingAssets {
   static const buttonLetsPlayDisabled =
       'assets/images/onboarding/btn_lets_play_disabled.png';
   static const loadingTrack = 'assets/images/onboarding/loading_track.png';
-  static const loadingCart = 'assets/images/onboarding/loading_cart.png';
   static const checkboxCheck = 'assets/images/onboarding/checkbox_check.png';
 }
 
@@ -30,15 +29,10 @@ class OnboardingScreen extends StatefulWidget {
   State<OnboardingScreen> createState() => _OnboardingScreenState();
 }
 
-class _OnboardingScreenState extends State<OnboardingScreen>
-    with TickerProviderStateMixin {
+class _OnboardingScreenState extends State<OnboardingScreen> {
   double _loadingProgress = 0;
   bool _termsAccepted = false;
   bool _loadingComplete = false;
-
-  static const _termsWarningSlideDuration = Duration(milliseconds: 280);
-  static const _termsWarningPanelHeight = 90.0;
-  late final AnimationController _termsWarningController;
 
   bool get _canPlay =>
       _loadingComplete && _termsAccepted;
@@ -46,17 +40,12 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   @override
   void initState() {
     super.initState();
-    _termsWarningController = AnimationController(
-      vsync: this,
-      duration: _termsWarningSlideDuration,
-    );
     _loadTermsAccepted();
     WidgetsBinding.instance.addPostFrameCallback((_) => _performLoading());
   }
 
   @override
   void dispose() {
-    _termsWarningController.dispose();
     super.dispose();
   }
 
@@ -81,9 +70,6 @@ class _OnboardingScreenState extends State<OnboardingScreen>
       _loadingProgress = 1.0;
       _loadingComplete = true;
     });
-    if (!_termsAccepted) {
-      _termsWarningController.forward();
-    }
   }
 
   Future<void> _precacheAll() async {
@@ -169,7 +155,9 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('terms_accepted', true);
     await prefs.setBool('onboarding_completed', true);
-    final isBonusAvailable = await DailyBonusService.isBonusAvailableToday();
+    const _testModeAlwaysShowWelcomeBonus = false;
+    final isBonusAvailable = _testModeAlwaysShowWelcomeBonus ||
+        await DailyBonusService.isBonusAvailableToday();
 
     if (!mounted) return;
     Navigator.of(context).pushReplacement(
@@ -185,11 +173,6 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     HapticFeedback.selectionClick();
     final newValue = !_termsAccepted;
     setState(() => _termsAccepted = newValue);
-    if (newValue) {
-      _termsWarningController.reverse();
-    } else if (_loadingComplete) {
-      _termsWarningController.forward();
-    }
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('terms_accepted', newValue);
   }
@@ -198,6 +181,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   Widget build(BuildContext context) {
     final topPadding = MediaQuery.paddingOf(context).top;
     return Scaffold(
+      backgroundColor: const Color(0xFF1A1510),
       body: Stack(
         fit: StackFit.expand,
         children: [
@@ -220,36 +204,25 @@ class _OnboardingScreenState extends State<OnboardingScreen>
               ),
             ),
           ),
-          if (_loadingComplete && (_termsWarningController.value > 0 || !_termsAccepted))
+          if (_loadingComplete && !_termsAccepted)
             Positioned(
               top: 0,
               left: 0,
               right: 0,
-              child: AnimatedBuilder(
-                animation: _termsWarningController,
-                builder: (context, _) {
-                  final value = _termsWarningController.value;
-                  final curveValue = Curves.easeOutCubic.transform(value);
-                  final offsetY = -_termsWarningPanelHeight * (1 - curveValue);
-                  return Transform.translate(
-                    offset: Offset(0, offsetY),
-                    child: Padding(
-                      padding: EdgeInsets.only(
-                        top: topPadding + 8,
-                        left: 24,
-                        right: 24,
-                      ),
-                      child: Material(
-                        color: Colors.transparent,
-                        child: const WarningPanel(
-                          message:
-                              'Please confirm that you are at least 18 years old and agree to the Terms of Use and Privacy Policy.',
-                          backgroundColor: Color(0xCC4E2F1C),
-                        ),
-                      ),
-                    ),
-                  );
-                },
+              child: Padding(
+                padding: EdgeInsets.only(
+                  top: topPadding + 8,
+                  left: 24,
+                  right: 24,
+                ),
+                child: Material(
+                  color: Colors.transparent,
+                  child: const WarningPanel(
+                    message:
+                        'Please confirm that you are at least 18 years old and agree to the Terms of Use and Privacy Policy.',
+                    backgroundColor: Color(0xCC4E2F1C),
+                  ),
+                ),
               ),
             ),
           SafeArea(
@@ -368,20 +341,14 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     );
   }
 
-  static const double _cartWidth = 94;
-  static const double _cartHeight = 61;
-
   Widget _buildLoadingBar() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 32),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          const cartRightOffset = 20.0;
           final barWidth = constraints.maxWidth;
           final progress = _loadingProgress.clamp(0.0, 1.0);
           final fillWidth = barWidth * progress;
-          final cartLeft = (fillWidth - _cartWidth + cartRightOffset)
-              .clamp(0.0, barWidth - _cartWidth + cartRightOffset);
           return SizedBox(
             height: 48,
             child: Stack(
@@ -426,20 +393,6 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                           offset: const Offset(0, 2),
                         ),
                       ],
-                    ),
-                  ),
-                ),
-                Positioned(
-                  left: cartLeft,
-                  top: (48 - _cartHeight) / 2,
-                  child: SizedBox(
-                    width: _cartWidth,
-                    height: _cartHeight,
-                    child: Image.asset(
-                      OnboardingAssets.loadingCart,
-                      fit: BoxFit.fill,
-                      errorBuilder: (context, error, stackTrace) =>
-                          const SizedBox.shrink(),
                     ),
                   ),
                 ),

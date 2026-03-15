@@ -59,6 +59,10 @@ class _CardMine21ScreenState extends State<CardMine21Screen>
   static const _resultDelay = Duration(milliseconds: 1200);
   int _overlayTargetWin = 0;
   int _overlayAnimatedWin = 0;
+  static const _cardFlyDurationMs = 650;
+  final Set<int> _slotsWithCardPlace = {}; // 0,1=dealer 2,3=player; show place until card lands
+  final ValueNotifier<int> _cardsLandedNotifier = ValueNotifier(0);
+  Timer? _cardsLandedTimer;
 
   @override
   void initState() {
@@ -157,13 +161,23 @@ class _CardMine21ScreenState extends State<CardMine21Screen>
   Future<void> _bootstrapGameState() async {
     if (!mounted || _bootstrapped || _loadingBalance) return;
     _bootstrapped = true;
-    final saved = await CardMine21Storage.loadGame();
-    if (!mounted) return;
-    final restored = saved != null && _restoreGame(saved);
-    if (restored) return;
     await CardMine21Storage.clearGame();
     if (!mounted) return;
-    await _startRoundWithBet();
+    setState(() {
+      _game.resetForNewGame();
+      _game.dealDealerOnly();
+      _gameStarted = false;
+      _dealerRevealed = false;
+      _winOverlayShownForRound = false;
+      _showResultOverlay = false;
+    });
+    _scheduleCardsLanded([0, 1]);
+    for (var i = 0; i < 2; i++) {
+      unawaited(
+        Future<void>.delayed(Duration(milliseconds: i * 80))
+            .then((_) => AudioService.instance.playCardDrop()),
+      );
+    }
   }
 
   Future<void> _saveGameState() async {
@@ -173,8 +187,23 @@ class _CardMine21ScreenState extends State<CardMine21Screen>
     }
   }
 
+  void _scheduleCardsLanded(List<int> slots) {
+    _cardsLandedTimer?.cancel();
+    for (final s in slots) _slotsWithCardPlace.add(s);
+    _cardsLandedTimer = Timer(
+      const Duration(milliseconds: _cardFlyDurationMs),
+      () {
+        if (!mounted) return;
+        for (final s in slots) _slotsWithCardPlace.remove(s);
+        _cardsLandedNotifier.value++;
+      },
+    );
+  }
+
   @override
   void dispose() {
+    _cardsLandedTimer?.cancel();
+    _cardsLandedNotifier.dispose();
     BalanceService.balanceNotifier.removeListener(_onBalanceNotifierChanged);
     _adjustTimer?.cancel();
     _adjustWatch?.stop();
@@ -186,19 +215,15 @@ class _CardMine21ScreenState extends State<CardMine21Screen>
 
   Future<void> _loadBalance() async {
     final value = await BalanceService.getBalance();
-    final savedBet = await BalanceService.getLastBet();
-    var restoredBet = savedBet ?? _baseBet;
-    if (value > 0) {
-      restoredBet = restoredBet.clamp(_minBet, value);
-    } else if (restoredBet < _minBet) {
-      restoredBet = _minBet;
-    }
+    final initialBet = value > 0
+        ? (value * 0.05).round().clamp(_minBet, value)
+        : _minBet;
     if (!mounted) return;
     setState(() {
       _balance = value;
       _displayBalance = value;
       _balanceAnimFrom = value.toDouble();
-      _bet = restoredBet;
+      _bet = initialBet;
       _loadingBalance = false;
     });
     await _bootstrapGameState();
@@ -362,9 +387,14 @@ class _CardMine21ScreenState extends State<CardMine21Screen>
     await CardMine21Storage.clearGame();
 
     final nextBalance = _balance - roundBet;
+    final dealerAlreadyHasCards = _game.dealerHand.length == 2 && _game.playerHand.isEmpty;
     setState(() {
       _balance = nextBalance;
-      _game.startNewRound();
+      if (dealerAlreadyHasCards) {
+        _game.dealPlayerOnly();
+      } else {
+        _game.startNewRound();
+      }
       _dealerRevealed = false;
       _winOverlayShownForRound = false;
       _showResultOverlay = false;
@@ -372,7 +402,9 @@ class _CardMine21ScreenState extends State<CardMine21Screen>
       _gameStarted = true;
       _handlePhaseChanged();
     });
-    for (var i = 0; i < 4; i++) {
+    _scheduleCardsLanded(dealerAlreadyHasCards ? [2, 3] : [0, 1, 2, 3]);
+    final cardCount = dealerAlreadyHasCards ? 2 : 4;
+    for (var i = 0; i < cardCount; i++) {
       unawaited(
         Future<void>.delayed(Duration(milliseconds: i * 80))
             .then((_) => AudioService.instance.playCardDrop()),
@@ -431,6 +463,7 @@ class _CardMine21ScreenState extends State<CardMine21Screen>
       _notificationController.reset();
       _handlePhaseChanged();
     });
+    _scheduleCardsLanded([0, 1, 2, 3]);
     for (var i = 0; i < 4; i++) {
       unawaited(
         Future<void>.delayed(Duration(milliseconds: i * 80))
@@ -588,14 +621,14 @@ class _CardMine21ScreenState extends State<CardMine21Screen>
           ),
           SizedBox(width: 42 * scale),
           SizedBox(
-            width: 154 * scale,
-            height: 80 * scale,
+            width: 154 * scale * 0.85,
+            height: 80 * scale * 0.85,
             child: TapBanner(
               bannerAsset: 'assets/images/shop/banner_miner_pass.png',
-              width: 154 * scale,
-              height: 80 * scale,
-              tapScale: 0.62,
-              tapOffset: const Offset(0, 59),
+              width: 154 * scale * 0.85,
+              height: 80 * scale * 0.85,
+              tapScale: 0.558,
+              tapOffset: const Offset(35, 59),
               onTap: () {
                 HapticFeedback.lightImpact();
                 Navigator.of(context).push(
@@ -641,7 +674,7 @@ class _CardMine21ScreenState extends State<CardMine21Screen>
               height: 85 * scale,
             ),
             Padding(
-              padding: EdgeInsets.only(top: 2 * scale),
+              padding: EdgeInsets.only(top: 5 * scale),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -764,18 +797,13 @@ class _CardMine21ScreenState extends State<CardMine21Screen>
       child: SizedBox(
         width: _cardWidth * scale,
         height: _cardHeight * scale,
-        child: Stack(
-          children: [
-            _buildCardPlace(scale),
-            Image.asset(
-              faceDown
-                  ? 'assets/images/card_mine_21/card/back.png'
-                  : card.assetPath,
-              fit: BoxFit.fill,
-              width: _cardWidth * scale,
-              height: _cardHeight * scale,
-            ),
-          ],
+        child: Image.asset(
+          faceDown
+              ? 'assets/images/card_mine_21/card/back.png'
+              : card.assetPath,
+          fit: BoxFit.fill,
+          width: _cardWidth * scale,
+          height: _cardHeight * scale,
         ),
       ),
     );
@@ -843,18 +871,28 @@ class _CardMine21ScreenState extends State<CardMine21Screen>
           child: Stack(
             clipBehavior: Clip.none,
             children: [
-              if (_game.dealerHand.isEmpty)
-                Positioned(
-                  left: dealerSlotsLeft,
-                  top: 0,
-                  child: _buildCardPlace(scale),
+              Positioned.fill(
+                child: ValueListenableBuilder<int>(
+                  valueListenable: _cardsLandedNotifier,
+                  builder: (context, _, __) => Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      if (_game.dealerHand.length < 1 || _slotsWithCardPlace.contains(0))
+                        Positioned(
+                          left: dealerSlotsLeft,
+                          top: 0,
+                          child: _buildCardPlace(scale),
+                        ),
+                      if (_game.dealerHand.length < 2 || _slotsWithCardPlace.contains(1))
+                        Positioned(
+                          left: dealerSlotsLeft + cardW + spacing,
+                          top: 0,
+                          child: _buildCardPlace(scale),
+                        ),
+                    ],
+                  ),
                 ),
-              if (_game.dealerHand.length < 2)
-                Positioned(
-                  left: dealerSlotsLeft + cardW + spacing,
-                  top: 0,
-                  child: _buildCardPlace(scale),
-                ),
+              ),
               ...List.generate(_game.dealerHand.length, (i) {
                 final card = _game.dealerHand[i];
                 final showFace = _dealerRevealed;
@@ -903,18 +941,28 @@ class _CardMine21ScreenState extends State<CardMine21Screen>
           child: Stack(
             clipBehavior: Clip.none,
             children: [
-              if (_game.playerHand.isEmpty)
-                Positioned(
-                  left: playerSlotsLeft,
-                  top: 0,
-                  child: _buildCardPlace(scale),
+              Positioned.fill(
+                child: ValueListenableBuilder<int>(
+                  valueListenable: _cardsLandedNotifier,
+                  builder: (context, _, __) => Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      if (_game.playerHand.length < 1 || _slotsWithCardPlace.contains(2))
+                        Positioned(
+                          left: playerSlotsLeft,
+                          top: 0,
+                          child: _buildCardPlace(scale),
+                        ),
+                      if (_game.playerHand.length < 2 || _slotsWithCardPlace.contains(3))
+                        Positioned(
+                          left: playerSlotsLeft + cardW + spacing,
+                          top: 0,
+                          child: _buildCardPlace(scale),
+                        ),
+                    ],
+                  ),
                 ),
-              if (_game.playerHand.length < 2)
-                Positioned(
-                  left: playerSlotsLeft + cardW + spacing,
-                  top: 0,
-                  child: _buildCardPlace(scale),
-                ),
+              ),
               ...List.generate(_game.playerHand.length, (i) {
                 final card = _game.playerHand[i];
                 return Positioned(
@@ -1018,23 +1066,28 @@ class _CardMine21ScreenState extends State<CardMine21Screen>
                       ),
                     ),
                     SizedBox(height: 2 * scale),
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        SizedBox(
-                          width: 24 * scale,
-                          height: 24 * scale,
-                          child: Image.asset(
-                            'assets/images/shop/coin_icon.png',
-                            fit: BoxFit.contain,
-                          ),
+                    Transform.translate(
+                      offset: Offset(0, -6 * scale),
+                      child: Center(
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            SizedBox(
+                              width: 24 * scale,
+                              height: 24 * scale,
+                              child: Image.asset(
+                                'assets/images/shop/coin_icon.png',
+                                fit: BoxFit.contain,
+                              ),
+                            ),
+                            SizedBox(width: 6 * scale),
+                            _buildOutlinedValue(
+                              _formatAmount(_bet),
+                              size: 19 * scale,
+                            ),
+                          ],
                         ),
-                        SizedBox(width: 6 * scale),
-                        _buildOutlinedValue(
-                          _formatAmount(_bet),
-                          size: 19 * scale,
-                        ),
-                      ],
+                      ),
                     ),
                   ],
                 ),
@@ -1120,6 +1173,30 @@ class _CardMine21ScreenState extends State<CardMine21Screen>
           SizedBox(
             width: 208 * scale,
             height: 45 * scale,
+          ),
+        ],
+      );
+    }
+
+    if (!_gameStarted) {
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(height: 91 * scale, child: Center(child: _buildBetControls(scale))),
+          SizedBox(height: 12 * scale),
+          PressableButton(
+            onTap: () async {
+              HapticFeedback.lightImpact();
+              await _startRoundWithBet();
+            },
+            child: SizedBox(
+              width: 236 * scale,
+              height: 52 * scale,
+              child: Image.asset(
+                'assets/images/card_mine_21/play_btn.png',
+                fit: BoxFit.fill,
+              ),
+            ),
           ),
         ],
       );
@@ -1280,43 +1357,27 @@ class _CardMine21ScreenState extends State<CardMine21Screen>
                     _buildBalance(scale),
                     Expanded(
                       child: Center(
-                        child: _gameStarted
-                            ? _isLoseState && _showResultOverlay
-                                ? FadeTransition(
-                                    opacity: CurvedAnimation(
-                                      parent: _notificationController,
-                                      curve: Curves.easeOut,
-                                    ),
-                                    child: SizedBox(
-                                      width: 262 * scale,
-                                      height: 174 * scale,
-                                      child: Image.asset(
-                                        'assets/images/card_mine_21/lose.png',
-                                        fit: BoxFit.fill,
-                                      ),
-                                    ),
-                                  )
-                                : _isLoseState
-                                    ? Column(
-                                        mainAxisSize: MainAxisSize.min,
-                                        mainAxisAlignment: MainAxisAlignment.center,
-                                        children: [
-                                          _buildCardArea(scale, screenWidth),
-                                        ],
-                                      )
-                                    : Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      _buildCardArea(scale, screenWidth),
-                                    ],
-                                  )
-                            : Text(
-                                'Card Mine 21',
-                                style: TextStyle(
-                                  color: Colors.white70,
-                                  fontSize: 18 * scale,
+                        child: _isLoseState && _showResultOverlay
+                            ? FadeTransition(
+                                opacity: CurvedAnimation(
+                                  parent: _notificationController,
+                                  curve: Curves.easeOut,
                                 ),
+                                child: SizedBox(
+                                  width: 262 * scale,
+                                  height: 174 * scale,
+                                  child: Image.asset(
+                                    'assets/images/card_mine_21/lose.png',
+                                    fit: BoxFit.fill,
+                                  ),
+                                ),
+                              )
+                            : Column(
+                                mainAxisSize: MainAxisSize.min,
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  _buildCardArea(scale, screenWidth),
+                                ],
                               ),
                       ),
                     ),

@@ -44,10 +44,11 @@ class _ChiefTrollsWheelScreenState extends State<ChiefTrollsWheelScreen>
   late final math.Random _rng;
   Timer? _adjustTimer;
   Stopwatch? _adjustWatch;
-  final int _activeDelta = 0;
+  int _activeDelta = 0;
   bool _isWinOverlayVisible = false;
   int _overlayTargetWin = 0;
   int _overlayAnimatedWin = 0;
+  int _spinCount = 0;
   // Clockwise zones starting from the sector near top-left.
   static const _zoneMultipliers = <double>[
     0,
@@ -65,10 +66,6 @@ class _ChiefTrollsWheelScreenState extends State<ChiefTrollsWheelScreen>
     0,
   ];
   static const _firstZoneCenterDeg = 0.0;
-
-  Timer? _adjustTimer;
-  Stopwatch? _adjustWatch;
-  int _activeDelta = 0;
 
   @override
   void initState() {
@@ -140,19 +137,15 @@ class _ChiefTrollsWheelScreenState extends State<ChiefTrollsWheelScreen>
 
   Future<void> _loadBalance() async {
     final value = await BalanceService.getBalance();
-    final savedBet = await BalanceService.getLastBet();
-    var restoredBet = savedBet ?? _baseBet;
-    if (value > 0) {
-      restoredBet = restoredBet.clamp(_minBet, value);
-    } else if (restoredBet < _minBet) {
-      restoredBet = _minBet;
-    }
+    final initialBet = value > 0
+        ? (value * 0.05).round().clamp(_minBet, value)
+        : _minBet;
     if (!mounted) return;
     setState(() {
       _balance = value;
       _displayBalance = value;
       _balanceAnimFrom = value.toDouble();
-      _bet = restoredBet;
+      _bet = initialBet;
       _loadingBalance = false;
     });
   }
@@ -324,13 +317,15 @@ class _ChiefTrollsWheelScreenState extends State<ChiefTrollsWheelScreen>
   }
 
   double _pickWeightedMultiplier() {
-    // Requested chances by weights: (x0 or x1)=70, x3=15, x10=5.
-    final roll = _rng.nextDouble() * 90;
-    if (roll < 70) {
-      final low = _zoneMultipliers.where((m) => m == 0 || m == 1).toList();
-      return low[_rng.nextInt(low.length)];
+    _spinCount++;
+    if (_spinCount % 6 == 0) {
+      final winOptions = [1.0, 3.0, 10.0];
+      return winOptions[_rng.nextInt(winOptions.length)];
     }
-    if (roll < 85) return 3;
+    final roll = _rng.nextDouble() * 100;
+    if (roll < 75) return 0;
+    if (roll < 87.5) return 1;
+    if (roll < 93.75) return 3;
     return 10;
   }
 
@@ -583,14 +578,14 @@ class _ChiefTrollsWheelScreenState extends State<ChiefTrollsWheelScreen>
           ),
           SizedBox(width: 42 * scale),
           SizedBox(
-            width: 154 * scale,
-            height: 80 * scale,
+            width: 154 * scale * 0.85,
+            height: 80 * scale * 0.85,
             child: TapBanner(
               bannerAsset: 'assets/images/shop/banner_miner_pass.png',
-              width: 154 * scale,
-              height: 80 * scale,
-              tapScale: 0.62,
-              tapOffset: const Offset(0, 59),
+              width: 154 * scale * 0.85,
+              height: 80 * scale * 0.85,
+              tapScale: 0.558,
+              tapOffset: const Offset(35, 59),
               onTap: () {
                 HapticFeedback.lightImpact();
                 Navigator.of(context).push(
@@ -626,7 +621,7 @@ class _ChiefTrollsWheelScreenState extends State<ChiefTrollsWheelScreen>
               height: 85 * scale,
             ),
             Padding(
-              padding: EdgeInsets.only(top: 2 * scale),
+              padding: EdgeInsets.only(top: 5 * scale),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -736,23 +731,28 @@ class _ChiefTrollsWheelScreenState extends State<ChiefTrollsWheelScreen>
                       ),
                     ),
                     SizedBox(height: 2 * scale),
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        SizedBox(
-                          width: 24 * scale,
-                          height: 24 * scale,
-                          child: Image.asset(
-                            'assets/images/shop/coin_icon.png',
-                            fit: BoxFit.contain,
-                          ),
+                    Transform.translate(
+                      offset: Offset(0, -6 * scale),
+                      child: Center(
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            SizedBox(
+                              width: 24 * scale,
+                              height: 24 * scale,
+                              child: Image.asset(
+                                'assets/images/shop/coin_icon.png',
+                                fit: BoxFit.contain,
+                              ),
+                            ),
+                            SizedBox(width: 6 * scale),
+                            _buildOutlinedValue(
+                              _formatAmount(_bet),
+                              size: 19 * scale,
+                            ),
+                          ],
                         ),
-                        SizedBox(width: 6 * scale),
-                        _buildOutlinedValue(
-                          _formatAmount(_bet),
-                          size: 19 * scale,
-                        ),
-                      ],
+                      ),
                     ),
                   ],
                 ),

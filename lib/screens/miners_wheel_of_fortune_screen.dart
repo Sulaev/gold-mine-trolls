@@ -96,8 +96,7 @@ class _MinersWheelOfFortuneScreenState extends State<MinersWheelOfFortuneScreen>
   static const _balanceFill = Color(0xFFFFFFFF);
   static const _rouletteBackSize = 349.0;
   static const _rouletteSize = 250.0;
-  static const _rouletteUpWidth = 145.0;
-  static const _rouletteUpHeight = 139.0;
+  static const _rouletteUpSize = 145.0;
   static const _poleWidth = 327.0;
   static const _poleHeight = 178.0;
   static const _youWinBannerWidth = 243.0;
@@ -120,6 +119,7 @@ class _MinersWheelOfFortuneScreenState extends State<MinersWheelOfFortuneScreen>
   final Set<RouletteBetKey> _selectedZones = {};
 
   Timer? _adjustTimer;
+  Timer? _winOverlayTimer;
   Stopwatch? _adjustWatch;
 
   late final AnimationController _idleSpinController;
@@ -261,6 +261,7 @@ class _MinersWheelOfFortuneScreenState extends State<MinersWheelOfFortuneScreen>
   void dispose() {
     BalanceService.balanceNotifier.removeListener(_onBalanceNotifierChanged);
     _adjustTimer?.cancel();
+    _winOverlayTimer?.cancel();
     _adjustWatch?.stop();
     _idleSpinController.dispose();
     _spinController.dispose();
@@ -272,27 +273,20 @@ class _MinersWheelOfFortuneScreenState extends State<MinersWheelOfFortuneScreen>
 
   Future<void> _loadBalance() async {
     final value = await BalanceService.getBalance();
-    final savedBet = await BalanceService.getLastBet();
     final savedLastWin = await BalanceService.getMinersWheelLastWin();
-    var restoredBet = savedBet ?? _baseBet;
-    if (value > 0) {
-      restoredBet = restoredBet.clamp(_minBet, value);
-    } else if (restoredBet < _minBet) {
-      restoredBet = _minBet;
-    }
-
+    final initialBet = value > 0
+        ? (value * 0.05).round().clamp(_minBet, value)
+        : _minBet;
     if (!mounted) return;
     setState(() {
       _balance = value;
       _displayBalance = value;
       _balanceAnimFrom = value.toDouble();
-      _bet = restoredBet;
+      _bet = initialBet;
       _lastWin = savedLastWin ?? 0;
       _loadingBalance = false;
     });
-    if (savedBet != restoredBet) {
-      unawaited(BalanceService.setLastBet(restoredBet));
-    }
+    unawaited(BalanceService.setLastBet(initialBet));
   }
 
   void _animateBalanceChange({int durationMs = 520}) {
@@ -425,27 +419,21 @@ class _MinersWheelOfFortuneScreenState extends State<MinersWheelOfFortuneScreen>
       child: CustomPaint(
         painter: _WinBannerBorderPainter(radius: radius),
         child: Center(
-          child: Transform.translate(
-            offset: Offset(0, 2 * scale),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.baseline,
-              textBaseline: TextBaseline.alphabetic,
-              children: [
-                Transform.translate(
-                  offset: Offset(0, -3 * scale),
-                  child: Text('YOU WIN: ', style: labelStyle),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Text('YOU WIN: ', style: labelStyle),
+              Transform.translate(
+                offset: Offset(0, 2 * scale),
+                child: Text(
+                  _formatWinAmount(_lastWin),
+                  style: amountStyle,
+                  textAlign: TextAlign.center,
                 ),
-                Transform.translate(
-                  offset: Offset(0, -3 * scale),
-                  child: Text(
-                    _formatWinAmount(_lastWin),
-                    style: amountStyle,
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
@@ -453,6 +441,7 @@ class _MinersWheelOfFortuneScreenState extends State<MinersWheelOfFortuneScreen>
   }
 
   void _showWinOverlay(int amount) {
+    _winOverlayTimer?.cancel();
     _notificationController.forward(from: 0);
     setState(() {
       _isWinOverlayVisible = true;
@@ -461,10 +450,17 @@ class _MinersWheelOfFortuneScreenState extends State<MinersWheelOfFortuneScreen>
     });
     _winCountController.duration = const Duration(milliseconds: 2200);
     _winCountController.forward(from: 0);
+    _winOverlayTimer = Timer(const Duration(seconds: 2), () {
+      if (mounted && _isWinOverlayVisible) {
+        _dismissWinOverlay();
+      }
+    });
   }
 
   void _dismissWinOverlay() {
     if (!_isWinOverlayVisible) return;
+    _winOverlayTimer?.cancel();
+    _winOverlayTimer = null;
     _notificationController.reverse();
     setState(() => _isWinOverlayVisible = false);
   }
@@ -751,7 +747,7 @@ class _MinersWheelOfFortuneScreenState extends State<MinersWheelOfFortuneScreen>
                         ),
                       ),
                       Padding(
-                        padding: EdgeInsets.only(top: 2 * scale),
+                        padding: EdgeInsets.only(top: 5 * scale),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
@@ -903,8 +899,7 @@ class _MinersWheelOfFortuneScreenState extends State<MinersWheelOfFortuneScreen>
   Widget _buildWheelOfFortune(double scale) {
     final backSize = _rouletteBackSize * scale;
     final rouletteSize = _rouletteSize * scale;
-    final upW = _rouletteUpWidth * scale;
-    final upH = _rouletteUpHeight * scale;
+    final upSize = _rouletteUpSize * scale;
 
     return AnimatedBuilder(
       animation: Listenable.merge([_idleSpinController, _spinController]),
@@ -954,27 +949,33 @@ class _MinersWheelOfFortuneScreenState extends State<MinersWheelOfFortuneScreen>
                 height: backSize,
                 fit: BoxFit.contain,
               ),
-              Transform.rotate(
-                angle: rouletteAngle,
-                child: Image.asset(
-                  'assets/images/miners_wheel_of_fortune/roulette.png',
-                  width: rouletteSize,
-                  height: rouletteSize,
-                  fit: BoxFit.contain,
+              Transform.translate(
+                offset: Offset(0, -4 * scale),
+                child: Transform.rotate(
+                  angle: rouletteAngle,
+                  child: Image.asset(
+                    'assets/images/miners_wheel_of_fortune/roulette.png',
+                    width: rouletteSize,
+                    height: rouletteSize,
+                    fit: BoxFit.contain,
+                  ),
                 ),
               ),
-              Transform.rotate(
-                angle: upAngle,
-                child: Image.asset(
-                  'assets/images/miners_wheel_of_fortune/roulette_up.png',
-                  width: upW,
-                  height: upH,
-                  fit: BoxFit.contain,
+              Transform.translate(
+                offset: Offset(0, -4 * scale),
+                child: Transform.rotate(
+                  angle: upAngle,
+                  child: Image.asset(
+                    'assets/images/miners_wheel_of_fortune/roulette_up.png',
+                    width: upSize,
+                    height: upSize,
+                    fit: BoxFit.contain,
+                  ),
                 ),
               ),
               if (_wheelSpinActive || _currentWinningNumber != null)
                 Transform.translate(
-                  offset: ballCenterOffset,
+                  offset: ballCenterOffset + Offset(0, -4 * scale),
                   child: Container(
                     width: 10 * scale,
                     height: 10 * scale,
@@ -1078,23 +1079,28 @@ class _MinersWheelOfFortuneScreenState extends State<MinersWheelOfFortuneScreen>
                               ),
                             ),
                             SizedBox(height: 2 * scale),
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                SizedBox(
-                                  width: 24 * scale,
-                                  height: 24 * scale,
-                                  child: Image.asset(
-                                    'assets/images/shop/coin_icon.png',
-                                    fit: BoxFit.contain,
-                                  ),
+                            Transform.translate(
+                              offset: Offset(0, -6 * scale),
+                              child: Center(
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    SizedBox(
+                                      width: 24 * scale,
+                                      height: 24 * scale,
+                                      child: Image.asset(
+                                        'assets/images/shop/coin_icon.png',
+                                        fit: BoxFit.contain,
+                                      ),
+                                    ),
+                                    SizedBox(width: 6 * scale),
+                                    _buildOutlinedValue(
+                                      _formatAmount(_bet),
+                                      size: 19 * scale,
+                                    ),
+                                  ],
                                 ),
-                                SizedBox(width: 6 * scale),
-                                _buildOutlinedValue(
-                                  _formatAmount(_bet),
-                                  size: 19 * scale,
-                                ),
-                              ],
+                              ),
                             ),
                           ],
                         ),
@@ -1184,6 +1190,7 @@ class _MinersWheelOfFortuneScreenState extends State<MinersWheelOfFortuneScreen>
               .clamp(0.82, 1.3)
               .toDouble();
           return Stack(
+            fit: StackFit.expand,
             children: [
               Positioned.fill(
                 child: Image.asset(

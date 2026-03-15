@@ -19,13 +19,14 @@ class ShopElementCard extends StatelessWidget {
   final bool showOnlyForYouBanner;
   final VoidCallback? onBuyTap;
 
-  static const _elementWidth = 261.0;
-  static const _onlyForYouBannerWidth = 117.0;
-  static const _onlyForYouBannerHeight = 22.0;
-  static const _elementHeight = 126.0;
-  static const _coinSize = 28.0;
-  static const _priceWidth = 99.0;
-  static const _priceHeight = 34.0;
+  static const _scale = 0.917; // 0.873 * 1.05 — увеличено на 5% вместе с shop_screen
+  static double get _elementWidth => 261 * _scale;
+  static double get _onlyForYouBannerWidth => 117 * _scale;
+  static double get _onlyForYouBannerHeight => 22 * _scale;
+  static double get _elementHeight => 126 * _scale;
+  static double get _coinSize => 28 * _scale;
+  static double get _priceWidth => 99 * _scale;
+  static double get _priceHeight => 34 * _scale;
 
   static const _amountColor = Color(0xFFFCDE66);
   static const _priceColor = Color(0xFFFFFFFF);
@@ -62,7 +63,7 @@ class ShopElementCard extends StatelessWidget {
               ),
             ),
             Positioned(
-              top: 24 + contentTopOffset,
+              top: 34 + contentTopOffset, // 29+5 px вниз для иконки и количества
               left: 0,
               right: 0,
               child: Column(
@@ -86,7 +87,7 @@ class ShopElementCard extends StatelessWidget {
                           ),
                         ),
                       ),
-                      const SizedBox(width: 8),
+                      SizedBox(width: 8 * _scale),
                       _buildAmountText(amountText),
                     ],
                   ),
@@ -99,7 +100,7 @@ class ShopElementCard extends StatelessWidget {
             ),
           if (showOnlyForYouBanner)
             Positioned(
-              top: 18,
+              top: 18 * _scale,
               left: (_elementWidth - _onlyForYouBannerWidth) / 2,
               child: Image.asset(
                 'assets/images/shop/banner_only_for_you.png',
@@ -114,7 +115,7 @@ class ShopElementCard extends StatelessWidget {
                       'ONLY FOR YOU',
                       style: TextStyle(
                         color: Colors.amber,
-                        fontSize: 10,
+                        fontSize: 10 * _scale,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
@@ -131,7 +132,7 @@ class ShopElementCard extends StatelessWidget {
   static TextStyle _amountTextStyle({Color? color, Paint? foreground}) {
     return GoogleFonts.montserrat(
       fontWeight: FontWeight.w900,
-      fontSize: 23.24,
+      fontSize: 23.24 * _scale,
       height: 1.6,
       letterSpacing: -0.02,
       color: foreground != null ? null : color,
@@ -148,7 +149,7 @@ class ShopElementCard extends StatelessWidget {
 
   Widget _buildAmountText(String text) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            padding: EdgeInsets.symmetric(horizontal: 8 * _scale, vertical: 4 * _scale),
       child: Stack(
         children: [
           Text(
@@ -184,14 +185,14 @@ class ShopElementCard extends StatelessWidget {
                 ),
           ),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            padding: EdgeInsets.symmetric(horizontal: 10 * _scale, vertical: 4 * _scale),
             child: Stack(
               children: [
                 Text(
                   price,
-                  style: GoogleFonts.montserrat(
+                    style: GoogleFonts.montserrat(
                     fontWeight: FontWeight.w900,
-                    fontSize: 19.11,
+                    fontSize: 19.11 * _scale,
                     height: 1.6,
                     letterSpacing: -0.02,
                     foreground: Paint()
@@ -209,9 +210,9 @@ class ShopElementCard extends StatelessWidget {
                 ),
                 Text(
                   price,
-                  style: GoogleFonts.montserrat(
+                    style: GoogleFonts.montserrat(
                     fontWeight: FontWeight.w900,
-                    fontSize: 19.11,
+                    fontSize: 19.11 * _scale,
                     height: 1.6,
                     letterSpacing: -0.02,
                     color: _priceColor,

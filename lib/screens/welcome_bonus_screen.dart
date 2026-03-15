@@ -21,11 +21,8 @@ class _WelcomeBonusScreenState extends State<WelcomeBonusScreen>
   static const _buttonHeight = 82.0;
   static const _buttonBottomOffset = 51.0;
 
-  static const _trollWidth = 546.0;
-  static const _trollHeight = 449.0;
-  static const _trollOffsetX = 100.0;
-  static const _trollOffsetRight = 25.0;
-  static const _trollOffsetDown = 35.0;
+  static const _trollWidth = 570.0;
+  static const _trollHeight = 470.0;
   int _bonusAmount = 10000;
 
   late final AnimationController _pulseController;
@@ -56,11 +53,6 @@ class _WelcomeBonusScreenState extends State<WelcomeBonusScreen>
     setState(() => _bonusAmount = amount);
   }
 
-  double _trollScale(double physicalHeight) {
-    if (physicalHeight <= 0 || physicalHeight <= 1000) return 1.0;
-    return 1.5;
-  }
-
   String _formatAmount(int value) {
     final s = value.toString();
     final b = StringBuffer();
@@ -73,11 +65,8 @@ class _WelcomeBonusScreenState extends State<WelcomeBonusScreen>
 
   @override
   Widget build(BuildContext context) {
-    final mq = MediaQuery.of(context);
-    final physicalHeight = mq.devicePixelRatio * mq.size.height;
-    final screenHeight = physicalHeight > 0 ? physicalHeight : 812.0;
-    final trollScale = _trollScale(screenHeight);
     return Scaffold(
+      backgroundColor: const Color(0xFF1A1510),
       body: Stack(
         fit: StackFit.expand,
         clipBehavior: Clip.none,
@@ -140,29 +129,26 @@ class _WelcomeBonusScreenState extends State<WelcomeBonusScreen>
                     offset: const Offset(0, 8),
                     child: _buildBonusBox(_formatAmount(_bonusAmount)),
                   ),
-                  const SizedBox(height: 8),
-                  Transform.translate(
-                    offset: const Offset(
-                      -_trollOffsetX + _trollOffsetRight,
-                      _trollOffsetDown,
-                    ),
-                    child: Transform.scale(
-                      scale: trollScale,
-                      child: SizedBox(
-                        width: _trollWidth,
-                        height: _trollHeight,
-                        child: Image.asset(
-                          'assets/images/welcome_bonus/trolls.png',
-                          fit: BoxFit.contain,
-                          errorBuilder: (context, error, stackTrace) => Container(
-                            color: Colors.amber.withValues(alpha: 0.3),
-                            child: const Icon(Icons.face, size: 64),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
                 ],
+              ),
+            ),
+          ),
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: _buttonBottomOffset + _buttonHeight + 24 - 50,
+            child: Center(
+              child: SizedBox(
+                width: _trollWidth,
+                height: _trollHeight,
+                child: Image.asset(
+                  'assets/images/welcome_bonus/trolls.png',
+                  fit: BoxFit.contain,
+                  errorBuilder: (context, error, stackTrace) => Container(
+                    color: Colors.amber.withValues(alpha: 0.3),
+                    child: const Icon(Icons.face, size: 64),
+                  ),
+                ),
               ),
             ),
           ),
@@ -284,6 +270,8 @@ class _WelcomeBonusScreenState extends State<WelcomeBonusScreen>
           final amount = await DailyBonusService.claimTodayBonus();
           if (amount != null) {
             await BalanceService.addBalance(amount);
+            BalanceService.balanceNotifier.value =
+                await BalanceService.getBalance();
           }
           if (!context.mounted) return;
           Navigator.of(context).pushReplacement(

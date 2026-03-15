@@ -13,7 +13,7 @@ import 'package:gold_mine_trolls/widgets/pressable_button.dart';
 import 'package:gold_mine_trolls/widgets/tap_banner.dart';
 import 'package:gold_mine_trolls/widgets/warning_panel.dart';
 
-enum _CoeffMode { low, normal, high }
+enum _CoeffMode { low, medium, high }
 
 class GoldenAvalancheScreen extends StatefulWidget {
   const GoldenAvalancheScreen({super.key});
@@ -31,26 +31,23 @@ class _GoldenAvalancheScreenState extends State<GoldenAvalancheScreen>
   static const _balanceStroke = Color(0x40000000);
   static const _balanceFill = Color(0xFFFFFFFF);
   static const _pegSize = 14.0;
+  static const _pegGap = 16.0;
   static const _ballBackSize = 21.0;
   static const _ballSize = 13.0;
-  static const _chestWidth = 38.0;
-  static const _chestHeight = 35.0;
-  static const _chestGap = 4.0;
+  static const _chestWidth = 36.0;
+  static const _chestHeight = 33.0;
+  static const _chestGap = 2.0;
   static const _pegRows = [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13];
+  static final _pegFitScale = (9 * _chestWidth + 8 * _chestGap) /
+      (13 * _pegSize + 12 * _pegGap);
 
-  static const _multipliersLow = [0.5, 1.0, 1.5, 2.0, 2.5, 2.0, 1.5, 1.0, 0.5];
-  static const _multipliersNormal = [
-    4.5,
-    3.5,
-    2.5,
-    1.0,
-    0.5,
-    1.0,
-    2.5,
-    3.5,
-    4.5,
-  ];
-  static const _multipliersHigh = [8.0, 6.0, 4.0, 2.0, 1.0, 2.0, 4.0, 6.0, 8.0];
+  static const _maxFallingBalls = 10;
+  // Low: edge X0.5, X0.3, X0.2, X0.1, center X1.1
+  static const _multipliersLow = [0.5, 0.3, 0.2, 0.1, 1.1, 0.1, 0.2, 0.3, 0.5];
+  // Normal: edge X1.5, X0.5, X0.2, X0.1, center X1.5
+  static const _multipliersMedium = [1.5, 0.5, 0.2, 0.1, 1.5, 0.1, 0.2, 0.5, 1.5];
+  // High: edge X3.0, X0.8, X0.2, X0.05, center X1.5
+  static const _multipliersHigh = [3.0, 0.8, 0.2, 0.05, 1.5, 0.05, 0.2, 0.8, 3.0];
 
   final _rng = Random();
   late final AnimationController _balanceCountController;
@@ -60,7 +57,7 @@ class _GoldenAvalancheScreenState extends State<GoldenAvalancheScreen>
   double _balanceAnimFrom = 0;
   int _bet = _baseBet;
   bool _loadingBalance = true;
-  _CoeffMode _coeffMode = _CoeffMode.normal;
+  _CoeffMode _coeffMode = _CoeffMode.medium;
   int _ballSeq = 0;
 
   final List<_FallingBall> _balls = [];
@@ -70,10 +67,6 @@ class _GoldenAvalancheScreenState extends State<GoldenAvalancheScreen>
   Ticker? _physicsTicker;
   bool _autoDrop = false;
   Timer? _autoDropTimer;
-  Timer? _adjustTimer;
-  Stopwatch? _adjustWatch;
-  final int _activeDelta = 0;
-
   Timer? _adjustTimer;
   Stopwatch? _adjustWatch;
   int _activeDelta = 0;
@@ -130,8 +123,8 @@ class _GoldenAvalancheScreenState extends State<GoldenAvalancheScreen>
     switch (_coeffMode) {
       case _CoeffMode.low:
         return _multipliersLow;
-      case _CoeffMode.normal:
-        return _multipliersNormal;
+      case _CoeffMode.medium:
+        return _multipliersMedium;
       case _CoeffMode.high:
         return _multipliersHigh;
     }
@@ -139,19 +132,15 @@ class _GoldenAvalancheScreenState extends State<GoldenAvalancheScreen>
 
   Future<void> _loadBalance() async {
     final value = await BalanceService.getBalance();
-    final savedBet = await BalanceService.getLastBet();
-    var restoredBet = savedBet ?? _baseBet;
-    if (value > 0) {
-      restoredBet = restoredBet.clamp(_minBet, value);
-    } else if (restoredBet < _minBet) {
-      restoredBet = _minBet;
-    }
+    final initialBet = value > 0
+        ? (value * 0.05).round().clamp(_minBet, value)
+        : _minBet;
     if (!mounted) return;
     setState(() {
       _balance = value;
       _displayBalance = value;
       _balanceAnimFrom = value.toDouble();
-      _bet = restoredBet;
+      _bet = initialBet;
       _loadingBalance = false;
     });
   }
@@ -227,9 +216,9 @@ class _GoldenAvalancheScreenState extends State<GoldenAvalancheScreen>
 
   List<Offset> _getPegPositions(double scale) {
     const pegSize = _pegSize;
-    const gap = 16.0;
-    final s = pegSize * scale;
-    final g = gap * scale;
+    const gap = _pegGap;
+    final s = pegSize * scale * _pegFitScale;
+    final g = gap * scale * _pegFitScale;
     final boardWidth = (9 * _chestWidth + 8 * _chestGap) * scale;
     final boardCenterX = boardWidth / 2;
     final pegGridTop = _ballBackSize * scale + 8 * scale;
@@ -256,7 +245,9 @@ class _GoldenAvalancheScreenState extends State<GoldenAvalancheScreen>
     const ballRadius = _ballSize / 2;
     const pegRadius = _pegSize / 2;
 
-    final s = pegRadius * scale;
+    final s = pegRadius * scale * _pegFitScale;
+    final pegSize = _pegSize * scale * _pegFitScale;
+    final g = _pegGap * scale * _pegFitScale;
     final ballR = ballRadius * scale;
     final pegPositions = _getPegPositions(scale);
     final boardWidth = (9 * _chestWidth + 8 * _chestGap) * scale;
@@ -264,7 +255,7 @@ class _GoldenAvalancheScreenState extends State<GoldenAvalancheScreen>
     final pegGridTop = _ballBackSize * scale + 8 * scale;
     final chestRowTop =
         pegGridTop +
-        _pegRows.length * (_pegSize * scale + 16 * scale) +
+        _pegRows.length * (pegSize + g) +
         (12 - 20) * scale;
     final chestW = _chestWidth * scale;
     final chestGap = _chestGap * scale;
@@ -277,9 +268,36 @@ class _GoldenAvalancheScreenState extends State<GoldenAvalancheScreen>
       ball.x += ball.vx * dt;
       ball.y += ball.vy * dt;
 
-      // Keep balls inside board bounds so they never fly off-screen.
-      final minX = ballR;
-      final maxX = boardWidth - ballR;
+      // Pyramid walls: constrain ball to pyramid edges, inset ~4px.
+      const wallInset = 4.0;
+      final inset = wallInset * scale;
+      double minX;
+      double maxX;
+      if (ball.y < pegGridTop) {
+        final n = _pegRows.first;
+        final rowWidth = n * pegSize + (n - 1) * g;
+        minX = boardCenterX - rowWidth / 2 + ballR + inset;
+        maxX = boardCenterX + rowWidth / 2 - ballR - inset;
+      } else if (ball.y >= chestRowTop) {
+        minX = boardCenterX - totalChestWidth / 2 + ballR + inset;
+        maxX = boardCenterX + totalChestWidth / 2 - ballR - inset;
+      } else {
+        final rowHeight = pegSize + g;
+        final rowF = ((ball.y - pegGridTop) / rowHeight).clamp(0.0, (_pegRows.length - 1).toDouble());
+        final r0 = rowF.floor().clamp(0, _pegRows.length - 1);
+        final r1 = (r0 + 1).clamp(0, _pegRows.length - 1);
+        final t = rowF - r0;
+        final n0 = _pegRows[r0];
+        final n1 = _pegRows[r1];
+        final w0 = n0 * pegSize + (n0 - 1) * g;
+        final w1 = n1 * pegSize + (n1 - 1) * g;
+        final left0 = boardCenterX - w0 / 2;
+        final left1 = boardCenterX - w1 / 2;
+        final right0 = boardCenterX + w0 / 2;
+        final right1 = boardCenterX + w1 / 2;
+        minX = (left0 + t * (left1 - left0)) + ballR + inset;
+        maxX = (right0 + t * (right1 - right0)) - ballR - inset;
+      }
       if (ball.x < minX) {
         ball.x = minX;
         if (ball.vx < 0) {
@@ -389,6 +407,14 @@ class _GoldenAvalancheScreenState extends State<GoldenAvalancheScreen>
   }
 
   Future<void> _onDrop() async {
+    final fallingCount = _balls.where((b) => b.chestIndex == null).length;
+    if (fallingCount >= _maxFallingBalls) {
+      showWarningSnackBar(
+        context,
+        'Wait for balls to land. Max $_maxFallingBalls at a time.',
+      );
+      return;
+    }
     if (_loadingBalance || _balance < _bet) {
       if (!_loadingBalance) {
         showWarningSnackBar(context, 'Not enough coins to start the game.');
@@ -405,7 +431,7 @@ class _GoldenAvalancheScreenState extends State<GoldenAvalancheScreen>
     final boardWidth = (9 * _chestWidth + 8 * _chestGap) * _plinkoScale;
     final boardCenterX = boardWidth / 2;
     final startY = _ballBackSize * _plinkoScale / 2;
-    final startX = boardCenterX + (_rng.nextDouble() - 0.5) * 4;
+    final startX = boardCenterX;
 
     final ball = _FallingBall(
       id: _ballSeq++,
@@ -482,14 +508,14 @@ class _GoldenAvalancheScreenState extends State<GoldenAvalancheScreen>
           ),
           SizedBox(width: 42 * scale),
           SizedBox(
-            width: 154 * scale,
-            height: 80 * scale,
+            width: 154 * scale * 0.85,
+            height: 80 * scale * 0.85,
             child: TapBanner(
               bannerAsset: 'assets/images/shop/banner_miner_pass.png',
-              width: 154 * scale,
-              height: 80 * scale,
-              tapScale: 0.62,
-              tapOffset: const Offset(0, 59),
+              width: 154 * scale * 0.85,
+              height: 80 * scale * 0.85,
+              tapScale: 0.558,
+              tapOffset: const Offset(35, 59),
               onTap: () {
                 HapticFeedback.lightImpact();
                 Navigator.of(context).push(
@@ -525,7 +551,7 @@ class _GoldenAvalancheScreenState extends State<GoldenAvalancheScreen>
               height: 85 * scale,
             ),
             Padding(
-              padding: EdgeInsets.only(top: 2 * scale),
+              padding: EdgeInsets.only(top: 5 * scale),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -566,6 +592,8 @@ class _GoldenAvalancheScreenState extends State<GoldenAvalancheScreen>
   }
 
   bool get _hasFallingBalls => _balls.any((b) => b.chestIndex == null);
+  bool get _canDropMore =>
+      _balls.where((b) => b.chestIndex == null).length < _maxFallingBalls;
 
   Widget _buildCoeffButtons(double scale) {
     final disabled = _hasFallingBalls;
@@ -603,7 +631,7 @@ class _GoldenAvalancheScreenState extends State<GoldenAvalancheScreen>
         ),
         SizedBox(width: 8 * scale),
         btn(
-          _CoeffMode.normal,
+          _CoeffMode.medium,
           'assets/images/golden_avalanche/normal_btn.png',
           'assets/images/golden_avalanche/normal_btn_passive.png',
         ),
@@ -702,23 +730,28 @@ class _GoldenAvalancheScreenState extends State<GoldenAvalancheScreen>
                       ),
                     ),
                     SizedBox(height: 2 * scale),
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        SizedBox(
-                          width: 24 * scale,
-                          height: 24 * scale,
-                          child: Image.asset(
-                            'assets/images/shop/coin_icon.png',
-                            fit: BoxFit.contain,
-                          ),
+                    Transform.translate(
+                      offset: Offset(0, -6 * scale),
+                      child: Center(
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            SizedBox(
+                              width: 24 * scale,
+                              height: 24 * scale,
+                              child: Image.asset(
+                                'assets/images/shop/coin_icon.png',
+                                fit: BoxFit.contain,
+                              ),
+                            ),
+                            SizedBox(width: 6 * scale),
+                            _buildOutlinedValue(
+                              _formatAmount(_bet),
+                              size: 19 * scale,
+                            ),
+                          ],
                         ),
-                        SizedBox(width: 6 * scale),
-                        _buildOutlinedValue(
-                          _formatAmount(_bet),
-                          size: 19 * scale,
-                        ),
-                      ],
+                      ),
                     ),
                   ],
                 ),
@@ -745,9 +778,11 @@ class _GoldenAvalancheScreenState extends State<GoldenAvalancheScreen>
               ),
             ),
             SizedBox(height: 4 * scale),
-            PressableButton(
-              onTap: _onDrop,
-              child: SizedBox(
+            Opacity(
+              opacity: _canDropMore ? 1 : 0.5,
+              child: PressableButton(
+                onTap: _onDrop,
+                child: SizedBox(
                 width: 103 * scale,
                 height: 58 * scale,
                 child: Image.asset(
@@ -756,6 +791,7 @@ class _GoldenAvalancheScreenState extends State<GoldenAvalancheScreen>
                 ),
               ),
             ),
+          ),
           ],
         ),
       ],
@@ -775,8 +811,10 @@ class _GoldenAvalancheScreenState extends State<GoldenAvalancheScreen>
     if (!_autoDrop || !mounted) return;
     _autoDropTimer = Timer(const Duration(seconds: 3), () {
       if (!mounted || !_autoDrop) return;
-      if (_balance >= _bet) {
+      if (_canDropMore && _balance >= _bet) {
         _onDrop();
+      } else if (!_canDropMore) {
+        _scheduleAutoDrop();
       } else {
         setState(() => _autoDrop = false);
       }
@@ -786,9 +824,9 @@ class _GoldenAvalancheScreenState extends State<GoldenAvalancheScreen>
 
   Widget _buildPegGrid(double scale) {
     const pegSize = _pegSize;
-    const gap = 16.0;
-    final s = pegSize * scale;
-    final g = gap * scale;
+    const gap = _pegGap;
+    final s = pegSize * scale * _pegFitScale;
+    final g = gap * scale * _pegFitScale;
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -869,15 +907,12 @@ class _GoldenAvalancheScreenState extends State<GoldenAvalancheScreen>
                         fit: BoxFit.fill,
                       ),
                     ),
-                    Transform.translate(
-                      offset: const Offset(-1, 0),
-                      child: SizedBox(
-                        width: _ballSize * scale,
-                        height: _ballSize * scale,
-                        child: Image.asset(
-                          'assets/images/golden_avalanche/ball.png',
-                          fit: BoxFit.contain,
-                        ),
+                    SizedBox(
+                      width: _ballSize * scale,
+                      height: _ballSize * scale,
+                      child: Image.asset(
+                        'assets/images/golden_avalanche/ball.png',
+                        fit: BoxFit.contain,
                       ),
                     ),
                   ],
@@ -902,7 +937,7 @@ class _GoldenAvalancheScreenState extends State<GoldenAvalancheScreen>
     return Stack(
       children: [
         Text(
-          'x${mult.toStringAsFixed(mult == mult.roundToDouble() ? 0 : 1)}',
+          'x${mult == 3.0 ? '3.0' : mult.toStringAsFixed(mult == mult.roundToDouble() ? 0 : 1)}',
           style: TextStyle(
             fontFamily: 'Gotham',
             fontWeight: FontWeight.w900,
@@ -916,7 +951,7 @@ class _GoldenAvalancheScreenState extends State<GoldenAvalancheScreen>
           ),
         ),
         Text(
-          'x${mult.toStringAsFixed(mult == mult.roundToDouble() ? 0 : 1)}',
+          'x${mult == 3.0 ? '3.0' : mult.toStringAsFixed(mult == mult.roundToDouble() ? 0 : 1)}',
           style: TextStyle(
             fontFamily: 'Gotham',
             fontWeight: FontWeight.w900,

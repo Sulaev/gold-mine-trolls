@@ -24,11 +24,12 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
   static const _betStep = 50;
   static const _minBet = 50;
   static const _baseBet = 10000;
-  static const _floorsRequired = 6;
+  static const _floorsRequired = 12;
 
   static const _balanceStroke = Color(0x40000000);
   static const _balanceFill = Color(0xFFFFFFFF);
   static const _towerVisualScale = 1 / 1.5;
+  static const _roomsAndFoundationScale = 0.85; // −15%
 
   static const _foundationWidth = 375.0;
   static const _foundationHeight = 217.0;
@@ -41,6 +42,9 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
   static const _trossWidth = 150.0;
   static const _trossHeight = 37.0;
   static const _trossDownOffset = -20.0;
+  static const _trossOffsetUp = 5.0; // опустить тросс на 10 px (было 15)
+  static const _roomOffsetDownOnHook = 0.0;
+  static const _roomOnlyOffsetDown = 10.0; // опустить только комнату, не тросс/крюк
   static const _roomVisualTopInset = 20.0;
   static const _roomVisualBottomInset = 20.0;
   static const _foundationLandingLift = 60.0;
@@ -50,15 +54,19 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
   static const _roomMoveSideMargin = 8.0;
   static const _roomMoveAmplitudeMinFactor = 0.72;
   static const _roomMoveAmplitudeMaxFactor = 0.96;
+  static const _hookSwingMaxAngleRad = 0.35; // ~20° left/right
   static const _roomMoveBaseDurationMs = 2300;
   static const _roomMoveMinDurationMs = 850;
   static const _dropTolerance = 28.0;
-  static const _placedRoomDownStep = 50.0;
+  static const _placedRoomDownStep = 32.0; // было 50 — меньше опускание
   static const _hookLeftOffset = 28.0;
   static const _sinkDurationMs = 550;
   static const _crashDurationMs = 380;
+  static const _winFadeDurationMs = 450;
   static const _failedDropHorizontalOffset = 52.0;
   static const _failedDropBottomInset = 34.0;
+  static const _loseZoneMargin = 55.0; // чуть шире выигрышная зона
+  static const _requiredOverlapFactor = 0.38; // чуть меньше перекрытие
   static const _loseCardWidth = 262.0;
   static const _loseCardHeight = 174.0;
   static const _tryAgainButtonWidth = 204.0;
@@ -90,6 +98,7 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
     _RoomAsset(
       asset: 'assets/images/mine_depth_tower/rooms/room3.png',
       sourceSize: Size(317, 249),
+      placeOffsetY: 10,
     ),
     _RoomAsset(
       asset: 'assets/images/mine_depth_tower/rooms/room4.png',
@@ -106,6 +115,7 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
     _RoomAsset(
       asset: 'assets/images/mine_depth_tower/rooms/room7.png',
       sourceSize: Size(350, 281),
+      placeOffsetY: 10,
     ),
     _RoomAsset(
       asset: 'assets/images/mine_depth_tower/rooms/room8.png',
@@ -114,6 +124,7 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
     _RoomAsset(
       asset: 'assets/images/mine_depth_tower/rooms/room9.png',
       sourceSize: Size(317, 249),
+      placeOffsetY: 10,
     ),
     _RoomAsset(
       asset: 'assets/images/mine_depth_tower/rooms/room10.png',
@@ -122,6 +133,7 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
     _RoomAsset(
       asset: 'assets/images/mine_depth_tower/rooms/room11.png',
       sourceSize: Size(311, 255),
+      placeOffsetY: 8,
     ),
     _RoomAsset(
       asset: 'assets/images/mine_depth_tower/rooms/room12.png',
@@ -129,14 +141,31 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
     ),
   ];
 
+  /// Чёткая очередность этажей: 1, 3, 5, 7, 9, 11, 5, 4, 10, 12, 2, 8
+  static const _roomSequence = [
+    0, 2, 4, 6, 8, 10, 4, 3, 9, 11, 1, 7,
+  ]; // room1, room3, room5, room7, room9, room11, room5, room4, room10, room12, room2, room8
+
   final _rng = Random();
-  final List<double> _multipliers = List.generate(17, (i) => 1.5 + i);
+
+  /// Этаж 0: x1, этаж 1: x1.4, этаж 2: x1.8, затем до x30 на этаже 11
+  double _baseMultiplierForFloor(int floorIndex) {
+    if (floorIndex <= 2) return 1 + floorIndex * 0.4;
+    return 1.8 + (floorIndex - 2) * (30 - 1.8) / 9;
+  }
+
+  static const _bonusChance = 0.2;
+  static const _bonusX3Chance = 0.4;
+
+  int? _activeRoomBonusType;
+  int? _droppingRoomBonusType;
 
   late final AnimationController _roomMoveController;
   late final AnimationController _dropController;
   late final AnimationController _balanceCountController;
   late final AnimationController _sinkController;
   late final AnimationController _crashController;
+  late final AnimationController _winFadeController;
 
   Timer? _adjustTimer;
   Stopwatch? _adjustWatch;
@@ -211,6 +240,14 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
           if (!mounted) return;
           setState(() {});
         });
+    _winFadeController =
+        AnimationController(
+          vsync: this,
+          duration: const Duration(milliseconds: _winFadeDurationMs),
+        )..addListener(() {
+          if (!mounted) return;
+          setState(() {});
+        });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       _precacheAssets();
@@ -232,6 +269,7 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
     _balanceCountController.dispose();
     _sinkController.dispose();
     _crashController.dispose();
+    _winFadeController.dispose();
     super.dispose();
   }
 
@@ -249,20 +287,15 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
 
   Future<void> _loadBalance() async {
     final value = await BalanceService.getBalance();
-    final savedBet = await BalanceService.getLastBet();
-    var restoredBet = savedBet ?? _baseBet;
-    if (value > 0) {
-      restoredBet = restoredBet.clamp(_minBet, value);
-    } else if (restoredBet < _minBet) {
-      restoredBet = _minBet;
-    }
-
+    final initialBet = value > 0
+        ? (value * 0.05).round().clamp(_minBet, value)
+        : _minBet;
     if (!mounted) return;
     setState(() {
       _balance = value;
       _displayBalance = value;
       _balanceAnimFrom = value.toDouble();
-      _bet = restoredBet;
+      _bet = initialBet;
       _loadingBalance = false;
     });
   }
@@ -407,18 +440,29 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
   }
 
   double _currentMultiplierValue() {
-    final index = _placedRooms.length.clamp(0, _multipliers.length - 1);
-    return _multipliers[index];
+    final floorIndex = _placedRooms.length;
+    var m = _baseMultiplierForFloor(floorIndex);
+    final bonus = _activeRoomBonusType;
+    if (bonus == 1) m *= 3;
+    else if (bonus == 2) m *= 1.5;
+    return m;
   }
 
   _RoomAsset _pickNextRoom() {
-    return _roomCatalog[_rng.nextInt(_roomCatalog.length)];
+    if (_rng.nextDouble() < _bonusChance) {
+      _activeRoomBonusType = _rng.nextDouble() < _bonusX3Chance ? 1 : 2;
+    } else {
+      _activeRoomBonusType = 0;
+    }
+    final floorIndex = _placedRooms.length;
+    final seqIndex = floorIndex % _roomSequence.length;
+    return _roomCatalog[_roomSequence[seqIndex]];
   }
 
   Size _scaledRoomSize(_RoomAsset room, double scale) {
     return Size(
-      room.sourceSize.width * scale * _towerVisualScale,
-      room.sourceSize.height * scale * _towerVisualScale,
+      room.sourceSize.width * scale * _towerVisualScale * _roomsAndFoundationScale,
+      room.sourceSize.height * scale * _towerVisualScale * _roomsAndFoundationScale,
     );
   }
 
@@ -430,14 +474,14 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
 
   double _foundationTop(double scale) {
     final fieldH = _fieldHeight * scale;
-    final foundationH = _towerScaled(_foundationHeight, scale);
+    final foundationH = _towerScaled(_foundationHeight, scale) * _roomsAndFoundationScale;
     final foundationBottom = _foundationBottom * scale;
     return fieldH - foundationBottom - foundationH;
   }
 
   double _foundationSurfaceY(double scale) {
     return _foundationTop(scale) +
-        _towerScaled(_foundationSurfaceInsetTop, scale);
+        _towerScaled(_foundationSurfaceInsetTop, scale) * _roomsAndFoundationScale;
   }
 
   double _swingProgress() {
@@ -462,21 +506,30 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
     _roomMoveController.repeat(reverse: true);
   }
 
-  double _currentSwingCenterX(_RoomAsset room, double scale) {
+  double _currentSwingAngle() {
     final t = Curves.easeInOutSine.transform(_roomMoveController.value);
+    return ((t * 2) - 1) * _hookSwingMaxAngleRad;
+  }
+
+  double _currentSwingCenterX(_RoomAsset room, double scale) {
+    final angle = _currentSwingAngle();
     final roomSize = _scaledRoomSize(room, scale);
-    final halfField = _fieldCenterX(scale);
-    final maxAmplitude = max(
-      0.0,
-      halfField - (roomSize.width / 2) - (_roomMoveSideMargin * scale),
-    );
-    final progress = _swingProgress();
-    final amplitudeFactor =
-        _roomMoveAmplitudeMinFactor +
-        ((_roomMoveAmplitudeMaxFactor - _roomMoveAmplitudeMinFactor) *
-            progress);
-    final amplitude = maxAmplitude * amplitudeFactor;
-    return halfField + ((t * 2) - 1) * amplitude;
+    final roomOffsetY = room.placeOffsetY * scale;
+    final roomTop = _towerScaled(_roomSpawnTop, scale) + roomOffsetY;
+    final pivotY = _towerScaled(_hookTop, scale);
+    final armLength = (roomTop + roomSize.height / 2) - pivotY;
+    return _fieldCenterX(scale) + armLength * sin(angle);
+  }
+
+  double _activeRoomTopLocal(_RoomAsset room, double scale) {
+    final hookTop = _towerScaled(_hookTop, scale);
+    final trossH = _towerScaled(_trossHeight, scale);
+    final trossDownOffset = _trossDownOffset * scale;
+    final roomOffsetY = room.placeOffsetY * scale;
+    final roomTop = _towerScaled(_roomSpawnTop, scale) + roomOffsetY;
+    final trossTop = max(0.0, roomTop - hookTop - trossH - trossDownOffset);
+    return trossTop + trossH + trossDownOffset - (_roomHookOffsetUp * scale)
+        + _roomOffsetDownOnHook;
   }
 
   double _roomVisualTopInsetScaled(double scale) =>
@@ -501,22 +554,17 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
     _RoomAsset room,
     Offset from,
     double scale,
-    double direction,
   ) {
     final roomSize = _scaledRoomSize(room, scale);
-    final shiftedLeft =
-        (from.dx + direction * (_failedDropHorizontalOffset * scale)).clamp(
-          0.0,
-          (_fieldWidth * scale) - roomSize.width,
-        );
     final impactVisibleBottomY =
         (_fieldHeight * scale) - (_failedDropBottomInset * scale);
     final impactTop =
         impactVisibleBottomY - _roomVisibleBottomOffset(roomSize, scale);
-    return Offset(shiftedLeft, impactTop);
+    final roomOffsetY = room.placeOffsetY * scale;
+    return Offset(from.dx, impactTop + roomOffsetY);
   }
 
-  Offset _roomTargetTopLeft(_RoomAsset room, double centerX, double scale) {
+  Offset _roomTargetTopLeft(_RoomAsset room, double leftX, double scale) {
     final roomSize = _scaledRoomSize(room, scale);
     final targetVisibleBottomY = _placedRooms.isEmpty
         ? _foundationSurfaceY(scale) - (_foundationLandingLift * scale)
@@ -527,14 +575,19 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
               (_stackLandingExtraDown * scale);
     final renderedTop =
         targetVisibleBottomY - _roomVisibleBottomOffset(roomSize, scale);
-    return Offset(centerX - roomSize.width / 2, renderedTop);
+    final roomOffsetY = room.placeOffsetY * scale;
+    return Offset(leftX, renderedTop + roomOffsetY);
   }
 
   Offset _activeRoomTopLeft(_RoomAsset room, double scale) {
     final roomSize = _scaledRoomSize(room, scale);
+    final angle = _currentSwingAngle();
+    final roomTopLocal = _activeRoomTopLocal(room, scale) + _roomOnlyOffsetDown;
+    final topCenterX = _fieldCenterX(scale) - sin(angle) * roomTopLocal;
+    final topY = _towerScaled(_hookTop, scale) + cos(angle) * roomTopLocal;
     return Offset(
-      _currentSwingCenterX(room, scale) - roomSize.width / 2,
-      _towerScaled(_roomSpawnTop, scale),
+      topCenterX - roomSize.width / 2,
+      topY,
     );
   }
 
@@ -551,11 +604,13 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
     _stopContinuousBetAdjust();
     _sinkController.reset();
     _crashController.reset();
+    _winFadeController.reset();
     setState(() {
       _placedRooms.clear();
       _roundActive = false;
       _isDropping = false;
       _droppingRoom = null;
+      _droppingRoomBonusType = null;
       _crashRoom = null;
       _dropFrom = null;
       _dropTo = null;
@@ -565,6 +620,7 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
       _currentRoundWinAmount = 0;
       _lastWinAmount = 0;
       _activeRoom = _pickNextRoom();
+      _activeRoomBonusType = null;
       if (!keepOutcome) {
         _isFailing = false;
         _isWinning = false;
@@ -583,13 +639,18 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
         _roundActive = false;
         _isWinning = true;
         _lastWinAmount = _currentRoundWinAmount;
+        _balance += _currentRoundWinAmount;
         _activeRoom = null;
       });
-      _crashController.forward(from: 0);
+      _animateBalanceChange(durationMs: 620);
+      unawaited(BalanceService.setBalance(_balance));
+      _winFadeController.forward(from: 0);
       unawaited(AudioService.instance.playWin());
       _roomMoveController.stop();
       return;
     }
+    // При победе выигрыш уже добавлен в completedTower; при Collect во время раунда — в !_isWinning
+    unawaited(BalanceService.setBalance(_balance));
     _resetRoundState();
   }
 
@@ -633,37 +694,67 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
       return;
     }
 
-    final scale = _screenScale(context);
-    final from = _activeRoomTopLeft(room, scale);
+    // Читаем позицию в callback после кадра — останавливаем маятник и сразу
+    // берём значение, чтобы оно соответствовало последнему отрисованному кадру.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _activeRoom != room) return;
+      _roomMoveController.stop();
+      final scale = _screenScale(context);
+      final from = _activeRoomTopLeft(room, scale);
+      _doDropRoom(room, from, scale);
+    });
+    return;
+  }
+
+  void _doDropRoom(_RoomAsset room, Offset from, double scale) async {
+    if (!mounted || _activeRoom != room) return;
     final roomSize = _scaledRoomSize(room, scale);
-    final targetCenter = _placedRooms.isEmpty
-        ? _fieldCenterX(scale)
-        : _placedRooms.last.centerX;
+    final roomLeft = from.dx;
+    final roomRight = from.dx + roomSize.width;
     final currentCenter = from.dx + roomSize.width / 2;
-    final tolerance = _placedRooms.isEmpty
-        ? 44 * scale
-        : max(_dropTolerance * scale, _placedRooms.last.size.width * 0.26);
-    final success = (currentCenter - targetCenter).abs() <= tolerance;
-    final failDirection = currentCenter >= targetCenter ? 1.0 : -1.0;
+    final fieldW = _fieldWidth * scale;
+    final margin = _loseZoneMargin * scale;
+    final inBounds =
+        from.dx >= margin && (from.dx + roomSize.width) <= (fieldW - margin);
+    final supportLeft = _placedRooms.isEmpty
+        ? ((_fieldWidth * scale) -
+                  (_towerScaled(_foundationWidth, scale) *
+                      _roomsAndFoundationScale)) /
+              2
+        : _placedRooms.last.topLeft.dx;
+    final supportRight = _placedRooms.isEmpty
+        ? supportLeft +
+              (_towerScaled(_foundationWidth, scale) *
+                  _roomsAndFoundationScale)
+        : _placedRooms.last.topLeft.dx + _placedRooms.last.size.width;
+    final overlap = min(roomRight, supportRight) - max(roomLeft, supportLeft);
+    final requiredOverlap = min(roomSize.width, supportRight - supportLeft) * _requiredOverlapFactor;
+    final success =
+        inBounds &&
+        overlap >= requiredOverlap;
+    final supportCenter = (supportLeft + supportRight) / 2;
+    final failDirection = currentCenter >= supportCenter ? 1.0 : -1.0;
 
     final to = success
-        ? _roomTargetTopLeft(room, currentCenter, scale)
-        : _failedDropTarget(room, from, scale, failDirection);
+        ? _roomTargetTopLeft(room, from.dx, scale)
+        : _failedDropTarget(room, from, scale);
 
     setState(() {
-      _balance -= _bet;
+      // Ставка списывается один раз в начале раунда
+      if (_placedRooms.isEmpty) _balance -= _bet;
       _isDropping = true;
       _isFailing = false;
       _droppingRoom = room;
+      _droppingRoomBonusType = _activeRoomBonusType;
       _dropFrom = from;
       _dropTo = to;
       _dropWillSucceed = success;
       _crashDirection = failDirection;
       _activeRoom = null;
+      _activeRoomBonusType = null;
     });
     _animateBalanceChange(durationMs: 360);
     await BalanceService.setBalance(_balance);
-    _roomMoveController.stop();
     _dropController.forward(from: 0);
     unawaited(AudioService.instance.playDrilling());
   }
@@ -679,10 +770,13 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
 
     if (_dropWillSucceed) {
       final floorIndex = _placedRooms.length;
-      final multiplier = _multipliers[min(floorIndex, _multipliers.length - 1)];
+      var multiplier = _baseMultiplierForFloor(floorIndex);
+      final bonus = _droppingRoomBonusType;
+      if (bonus == 1) multiplier *= 3;
+      else if (bonus == 2) multiplier *= 1.5;
       final roomSize = _scaledRoomSize(room, _screenScale(context));
       final centerX = target.dx + roomSize.width / 2;
-      final win = (_bet * multiplier).round();
+      final win = (_bet * multiplier).ceil();
       final nextPlacedCount = _placedRooms.length + 1;
       final completedTower = nextPlacedCount >= _floorsRequired;
 
@@ -696,15 +790,14 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
             size: roomSize,
           ),
         );
-        _balance += win;
+        // Баланс пополняется только при Collect, не при каждой комнате
         _currentRoundWinAmount += win;
         _droppingRoom = null;
         _dropFrom = null;
         _dropTo = null;
         _isDropping = false;
       });
-      _animateBalanceChange(durationMs: 620);
-      unawaited(BalanceService.setBalance(_balance));
+      // Баланс пополняется только при Collect/победе, не при каждой комнате
       unawaited(AudioService.instance.playMineDepthTowerRoomDown());
       unawaited(AnalyticsService.reportGameWin(_gameName));
       _dropController.reset();
@@ -717,9 +810,11 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
             _roundActive = false;
             _isWinning = true;
             _lastWinAmount = _currentRoundWinAmount;
+            _balance += _currentRoundWinAmount; // пополняем при победе
             _activeRoom = null;
           });
-          _crashController.forward(from: 0);
+          _animateBalanceChange(durationMs: 620);
+          _winFadeController.forward(from: 0);
           unawaited(AudioService.instance.playWin());
           _roomMoveController.stop();
           return;
@@ -742,10 +837,12 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
         _crashRoom = null;
         _crashTopLeft = null;
         _droppingRoom = null;
+        _droppingRoomBonusType = null;
         _dropFrom = null;
         _dropTo = null;
         _isDropping = false;
         _activeRoom = null;
+        _activeRoomBonusType = null;
         _isFailing = true;
       });
       _dropController.reset();
@@ -804,7 +901,7 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
               height: 85 * scale,
             ),
             Padding(
-              padding: EdgeInsets.only(top: 2 * scale),
+              padding: EdgeInsets.only(top: 5 * scale),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -935,11 +1032,11 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
         clipBehavior: Clip.none,
         children: [
           Positioned(
-            left: (fieldW - foundationW) / 2,
+            left: (fieldW - foundationW * _roomsAndFoundationScale) / 2,
             bottom: (_foundationBottom * scale) - totalSink,
             child: SizedBox(
-              width: foundationW,
-              height: foundationH,
+              width: foundationW * _roomsAndFoundationScale,
+              height: foundationH * _roomsAndFoundationScale,
               child: Image.asset(
                 'assets/images/mine_depth_tower/foundation.png',
                 fit: BoxFit.fill,
@@ -954,7 +1051,6 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
             _buildReleasedRig(scale),
           if (_droppingRoom != null && _dropFrom != null && _dropTo != null)
             _buildDroppingRoom(scale),
-          if (_activeRoom != null && !_isDropping) _buildActiveRoom(scale),
         ],
       ),
     );
@@ -980,35 +1076,7 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
     );
   }
 
-  Widget _buildActiveRoom(double scale) {
-    final room = _activeRoom!;
-    final roomSize = _scaledRoomSize(room, scale);
-    final topLeft = _activeRoomTopLeft(room, scale);
-    return Positioned(
-      left: topLeft.dx,
-      top: topLeft.dy,
-      child: AnimatedBuilder(
-        animation: _roomMoveController,
-        builder: (context, child) {
-          final updated = _activeRoomTopLeft(room, scale);
-          return Transform.translate(
-            offset: Offset(updated.dx - topLeft.dx, 0),
-            child: child,
-          );
-        },
-        child: SizedBox(
-          width: roomSize.width,
-          height: roomSize.height,
-          child: Image.asset(
-            room.asset,
-            fit: BoxFit.contain,
-            errorBuilder: (context, error, stackTrace) =>
-                const SizedBox.shrink(),
-          ),
-        ),
-      ),
-    );
-  }
+  static const _roomHookOffsetUp = 20.0;
 
   Widget _buildHangingRig(double scale) {
     final room = _activeRoom!;
@@ -1019,34 +1087,26 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
     final trossW = _towerScaled(_trossWidth, scale);
     final trossH = _towerScaled(_trossHeight, scale);
     final trossDownOffset = _trossDownOffset * scale;
-    final startLeft = _activeRoomTopLeft(room, scale).dx;
-    final initialCenterX = startLeft + roomSize.width / 2;
-    final initialRoomTop = _activeRoomTopLeft(room, scale).dy;
-    final initialTrossTop = max(
-      0.0,
-      initialRoomTop - hookTop - trossH - trossDownOffset,
-    );
-    final rigHeight = initialTrossTop + trossH;
-    final rigWidth = max(hookW, trossW);
+    final roomTopLocal = _activeRoomTopLocal(room, scale);
+    final roomTopForRoom = roomTopLocal + _roomOnlyOffsetDown;
+    final trossTop = roomTopLocal - trossH - trossDownOffset + (_roomHookOffsetUp * scale)
+        - _trossOffsetUp;
+    final pivotX = _fieldCenterX(scale);
+    final rigWidth = max(max(hookW, trossW), roomSize.width);
 
     return Positioned(
-      left: initialCenterX - hookW / 2 - (_hookLeftOffset * scale),
+      left: pivotX - rigWidth / 2,
       top: hookTop,
       child: AnimatedBuilder(
         animation: _roomMoveController,
         builder: (context, child) {
-          final currentLeft = _activeRoomTopLeft(room, scale).dx;
-          final currentCenterX = currentLeft + roomSize.width / 2;
-          final currentRoomTop = _activeRoomTopLeft(room, scale).dy;
-          final currentTrossTop = max(
-            0.0,
-            currentRoomTop - hookTop - trossH - trossDownOffset,
-          );
-          return Transform.translate(
-            offset: Offset(currentCenterX - initialCenterX, 0),
+          final angle = _currentSwingAngle();
+          return Transform.rotate(
+            angle: angle,
+            alignment: Alignment.topCenter,
             child: SizedBox(
               width: rigWidth,
-              height: rigHeight,
+              height: roomTopForRoom + roomSize.height,
               child: Stack(
                 clipBehavior: Clip.none,
                 children: [
@@ -1063,14 +1123,36 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
                     ),
                   ),
                   Positioned(
-                    top: currentTrossTop,
+                    top: trossTop,
                     left: (rigWidth - trossW) / 2,
-                    child: SizedBox(
-                      width: trossW,
-                      height: trossH,
-                      child: Image.asset(
-                        'assets/images/mine_depth_tower/tross.png',
-                        fit: BoxFit.fill,
+                    child: Transform.rotate(
+                      angle: -angle,
+                      alignment: Alignment.topCenter,
+                      child: SizedBox(
+                        width: trossW,
+                        height: trossH,
+                        child: Image.asset(
+                          'assets/images/mine_depth_tower/tross.png',
+                          fit: BoxFit.fill,
+                        ),
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    top: roomTopForRoom,
+                    left: (rigWidth - roomSize.width) / 2,
+                    child: Transform.rotate(
+                      angle: -angle,
+                      alignment: Alignment.topCenter,
+                      child: SizedBox(
+                        width: roomSize.width,
+                        height: roomSize.height,
+                        child: Image.asset(
+                          room.asset,
+                          fit: BoxFit.contain,
+                          errorBuilder: (context, error, stackTrace) =>
+                              const SizedBox.shrink(),
+                        ),
                       ),
                     ),
                   ),
@@ -1083,6 +1165,19 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
     );
   }
 
+  double _angleForRoomTopLeftX(double leftX, _RoomAsset room, double scale) {
+    final roomSize = _scaledRoomSize(room, scale);
+    final roomTopLocal = _activeRoomTopLocal(room, scale) + _roomOnlyOffsetDown;
+    final topCenterX = leftX + roomSize.width / 2;
+    final halfField = _fieldCenterX(scale);
+    final sinAngle = ((topCenterX - halfField) / roomTopLocal).clamp(
+      -1.0,
+      1.0,
+    );
+    // Обратная формула к topCenterX = halfField - sin(angle) * roomTopLocal
+    return -asin(sinAngle);
+  }
+
   Widget _buildReleasedRig(double scale) {
     final from = _dropFrom!;
     final room = _droppingRoom!;
@@ -1092,45 +1187,58 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
     final trossW = _towerScaled(_trossWidth, scale);
     final trossH = _towerScaled(_trossHeight, scale);
     final trossDownOffset = _trossDownOffset * scale;
-    final centerX = from.dx + roomSize.width / 2;
+    final roomTopLocal = _activeRoomTopLocal(room, scale);
+    final roomTopForRoom = roomTopLocal + _roomOnlyOffsetDown;
+    final trossTop =
+        roomTopLocal - trossH - trossDownOffset + (_roomHookOffsetUp * scale)
+        - _trossOffsetUp;
+    final pivotX = _fieldCenterX(scale);
+    final rigWidth = max(max(hookW, trossW), roomSize.width);
+    final angle = _angleForRoomTopLeftX(from.dx, room, scale);
     final hookTop = _towerScaled(_hookTop, scale);
-    final trossTop = max(0.0, from.dy - hookTop - trossH - trossDownOffset);
-    final rigHeight = trossTop + trossH;
-    final rigWidth = max(hookW, trossW);
+
     return Positioned(
-      left: centerX - max(hookW, trossW) / 2 - (_hookLeftOffset * scale),
+      left: pivotX - rigWidth / 2,
       top: hookTop,
-      child: SizedBox(
-        width: rigWidth,
-        height: rigHeight,
-        child: Stack(
-          clipBehavior: Clip.none,
-          children: [
-            Positioned(
-              top: 0,
-              left: (rigWidth - hookW) / 2,
-              child: SizedBox(
-                width: hookW,
-                height: hookH,
-                child: Image.asset(
-                  'assets/images/mine_depth_tower/cruck.png',
-                  fit: BoxFit.fill,
+      child: Transform.rotate(
+        angle: angle,
+        alignment: Alignment.topCenter,
+        child: SizedBox(
+          width: rigWidth,
+          height: roomTopForRoom + roomSize.height,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Positioned(
+                top: 0,
+                left: (rigWidth - hookW) / 2,
+                child: SizedBox(
+                  width: hookW,
+                  height: hookH,
+                  child: Image.asset(
+                    'assets/images/mine_depth_tower/cruck.png',
+                    fit: BoxFit.fill,
+                  ),
                 ),
               ),
-            ),
-            Positioned(
-              top: trossTop,
-              left: (rigWidth - trossW) / 2,
-              child: SizedBox(
-                width: trossW,
-                height: trossH,
-                child: Image.asset(
-                  'assets/images/mine_depth_tower/tross.png',
-                  fit: BoxFit.fill,
+              Positioned(
+                top: trossTop,
+                left: (rigWidth - trossW) / 2,
+                child: Transform.rotate(
+                  angle: -angle,
+                  alignment: Alignment.topCenter,
+                  child: SizedBox(
+                    width: trossW,
+                    height: trossH,
+                    child: Image.asset(
+                      'assets/images/mine_depth_tower/tross.png',
+                      fit: BoxFit.fill,
+                    ),
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -1318,23 +1426,28 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
                         ),
                       ),
                       SizedBox(height: 2 * scale),
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          SizedBox(
-                            width: 24 * scale,
-                            height: 24 * scale,
-                            child: Image.asset(
-                              'assets/images/shop/coin_icon.png',
-                              fit: BoxFit.contain,
-                            ),
+                      Transform.translate(
+                        offset: Offset(0, -6 * scale),
+                        child: Center(
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              SizedBox(
+                                width: 24 * scale,
+                                height: 24 * scale,
+                                child: Image.asset(
+                                  'assets/images/shop/coin_icon.png',
+                                  fit: BoxFit.contain,
+                                ),
+                              ),
+                              SizedBox(width: 6 * scale),
+                              _buildOutlinedValue(
+                                _formatAmount(_bet),
+                                size: 19 * scale,
+                              ),
+                            ],
                           ),
-                          SizedBox(width: 6 * scale),
-                          _buildOutlinedValue(
-                            _formatAmount(_bet),
-                            size: 19 * scale,
-                          ),
-                        ],
+                        ),
                       ),
                     ],
                   ),
@@ -1385,17 +1498,20 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
               children: [
                 _buildBetControl(scale),
                 SizedBox(width: 16 * scale),
-                IgnorePointer(
-                  ignoring: _isBuildLocked,
-                  child: PressableButton(
-                    onTap: _onPrimaryButtonTap,
-                    child: AnimatedOpacity(
-                      opacity: _isBuildLocked ? 0.6 : 1,
-                      duration: const Duration(milliseconds: 140),
-                      child: SizedBox(
-                        width: _buildButtonWidth * scale,
-                        height: _buildButtonHeight * scale,
-                        child: Image.asset(buttonAsset, fit: BoxFit.fill),
+                Transform.translate(
+                  offset: Offset(0, 10 * scale), // +15 px вниз только кнопка Start/Build
+                  child: IgnorePointer(
+                    ignoring: _isBuildLocked,
+                    child: PressableButton(
+                      onTap: _onPrimaryButtonTap,
+                      child: AnimatedOpacity(
+                        opacity: _isBuildLocked ? 0.6 : 1,
+                        duration: const Duration(milliseconds: 140),
+                        child: SizedBox(
+                          width: _buildButtonWidth * scale,
+                          height: _buildButtonHeight * scale,
+                          child: Image.asset(buttonAsset, fit: BoxFit.fill),
+                        ),
                       ),
                     ),
                   ),
@@ -1564,37 +1680,40 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
     );
   }
 
-  Widget _buildWinContent(double scale) {
+  Widget _buildWinOverlayFade(double scale) {
     final fade = CurvedAnimation(
-      parent: _crashController,
+      parent: _winFadeController,
       curve: Curves.easeOutCubic,
     );
     return FadeTransition(
       opacity: fade,
-      child: SafeArea(
-        child: Stack(
-          children: [
-            Positioned.fill(child: Center(child: _buildGameField(scale))),
-            Positioned.fill(
-              child: IgnorePointer(
-                child: Container(color: const Color(0x66000000)),
+      child: Positioned.fill(
+        child: SafeArea(
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: GestureDetector(
+                  onTap: () {},
+                  behavior: HitTestBehavior.opaque,
+                  child: Container(color: const Color(0x66000000)),
+                ),
               ),
-            ),
-            _buildMultiplierPlate(scale),
-            Center(child: _buildWinOverlay(scale)),
-            Positioned(
-              top: 4 * scale,
-              left: 0,
-              right: 0,
-              child: _buildTopBar(scale),
-            ),
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 18 * scale,
-              child: Center(child: _buildWinCollectButton(scale)),
-            ),
-          ],
+              _buildMultiplierPlate(scale),
+              Center(child: _buildWinOverlay(scale)),
+              Positioned(
+                top: 4 * scale,
+                left: 0,
+                right: 0,
+                child: _buildTopBar(scale),
+              ),
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 18 * scale,
+                child: Center(child: _buildWinCollectButton(scale)),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -1658,10 +1777,10 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
               ),
               if (_isFailing)
                 _buildLoseContent(scale)
-              else if (_isWinning)
-                _buildWinContent(scale)
-              else
+              else ...[
                 _buildGameContent(scale),
+                if (_isWinning) _buildWinOverlayFade(scale),
+              ],
             ],
           );
         },
@@ -1671,10 +1790,15 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
 }
 
 class _RoomAsset {
-  const _RoomAsset({required this.asset, required this.sourceSize});
+  const _RoomAsset({
+    required this.asset,
+    required this.sourceSize,
+    this.placeOffsetY = 0,
+  });
 
   final String asset;
   final Size sourceSize;
+  final double placeOffsetY;
 }
 
 class _PlacedRoom {

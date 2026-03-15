@@ -42,7 +42,7 @@ class _CautiousMinerScreenState extends State<CautiousMinerScreen>
   Timer? _winOverlayAutoHideTimer;
   Timer? _adjustTimer;
   Stopwatch? _adjustWatch;
-  final int _activeDelta = 0;
+  int _activeDelta = 0;
 
   int _balance = 0;
   int _displayBalance = 0;
@@ -55,10 +55,6 @@ class _CautiousMinerScreenState extends State<CautiousMinerScreen>
   bool _isWinOverlayVisible = false;
   int _overlayTargetWin = 0;
   int _overlayAnimatedWin = 0;
-
-  Timer? _adjustTimer;
-  Stopwatch? _adjustWatch;
-  int _activeDelta = 0;
 
   // true = gold, false = dynamite
   List<List<bool>> _cellMap = List.generate(
@@ -133,19 +129,15 @@ class _CautiousMinerScreenState extends State<CautiousMinerScreen>
 
   Future<void> _loadBalance() async {
     final value = await BalanceService.getBalance();
-    final savedBet = await BalanceService.getLastBet();
-    var restoredBet = savedBet ?? _baseBet;
-    if (value > 0) {
-      restoredBet = restoredBet.clamp(_minBet, value);
-    } else if (restoredBet < _minBet) {
-      restoredBet = _minBet;
-    }
+    final initialBet = value > 0
+        ? (value * 0.05).round().clamp(_minBet, value)
+        : _minBet;
     if (!mounted) return;
     setState(() {
       _balance = value;
       _displayBalance = value;
       _balanceAnimFrom = value.toDouble();
-      _bet = restoredBet;
+      _bet = initialBet;
       _loadingBalance = false;
     });
   }
@@ -178,7 +170,7 @@ class _CautiousMinerScreenState extends State<CautiousMinerScreen>
       transitionDuration: const Duration(milliseconds: 200),
       pageBuilder: (context, animation, secondaryAnimation) => InfoScreen(
         content: Padding(
-          padding: const EdgeInsets.only(top: 70, left: 40, right: 40),
+          padding: const EdgeInsets.only(top: 70, left: 44, right: 44),
           child: SingleChildScrollView(
             child: Text(
               'Get ready to test your intuition in this round! Your goal is to find safe tiles and avoid hitting a mine.\n'
@@ -189,7 +181,7 @@ class _CautiousMinerScreenState extends State<CautiousMinerScreen>
               'With each correct pick in a row, your multiplier grows rapidly.\n'
               'You can cash out your accumulated winnings in Golden Trolls Coins at any time before hitting a mine.',
               textAlign: TextAlign.center,
-              style: InfoScreen.mainTextStyle(),
+              style: InfoScreen.mainTextStyle().copyWith(fontSize: 11),
             ),
           ),
         ),
@@ -510,14 +502,14 @@ class _CautiousMinerScreenState extends State<CautiousMinerScreen>
           ),
           SizedBox(width: 42 * scale),
           SizedBox(
-            width: 154 * scale,
-            height: 80 * scale,
+            width: 154 * scale * 0.85,
+            height: 80 * scale * 0.85,
             child: TapBanner(
               bannerAsset: 'assets/images/shop/banner_miner_pass.png',
-              width: 154 * scale,
-              height: 80 * scale,
-              tapScale: 0.62,
-              tapOffset: const Offset(0, 59),
+              width: 154 * scale * 0.85,
+              height: 80 * scale * 0.85,
+              tapScale: 0.558,
+              tapOffset: const Offset(35, 59),
               onTap: () {
                 HapticFeedback.lightImpact();
                 Navigator.of(context).push(
@@ -563,7 +555,7 @@ class _CautiousMinerScreenState extends State<CautiousMinerScreen>
               height: 85 * scale,
             ),
             Padding(
-              padding: EdgeInsets.only(top: 2 * scale),
+              padding: EdgeInsets.only(top: 5 * scale),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -737,23 +729,28 @@ class _CautiousMinerScreenState extends State<CautiousMinerScreen>
                       ),
                     ),
                     SizedBox(height: 2 * scale),
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        SizedBox(
-                          width: 24 * scale,
-                          height: 24 * scale,
-                          child: Image.asset(
-                            'assets/images/shop/coin_icon.png',
-                            fit: BoxFit.contain,
-                          ),
+                    Transform.translate(
+                      offset: Offset(0, -6 * scale),
+                      child: Center(
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            SizedBox(
+                              width: 24 * scale,
+                              height: 24 * scale,
+                              child: Image.asset(
+                                'assets/images/shop/coin_icon.png',
+                                fit: BoxFit.contain,
+                              ),
+                            ),
+                            SizedBox(width: 6 * scale),
+                            _buildOutlinedValue(
+                              _formatAmount(_bet),
+                              size: 19 * scale,
+                            ),
+                          ],
                         ),
-                        SizedBox(width: 6 * scale),
-                        _buildOutlinedValue(
-                          _formatAmount(_bet),
-                          size: 19 * scale,
-                        ),
-                      ],
+                      ),
                     ),
                   ],
                 ),
