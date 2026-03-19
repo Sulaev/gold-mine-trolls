@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:gold_mine_trolls/app_route_observer.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -87,7 +88,7 @@ class _WinBannerBorderPainter extends CustomPainter {
 }
 
 class _MinersWheelOfFortuneScreenState extends State<MinersWheelOfFortuneScreen>
-    with TickerProviderStateMixin {
+    with TickerProviderStateMixin, RouteAware {
   static const _gameName = 'miners_wheel_of_fortune';
   static const _betStep = 50;
   static const _minBet = 50;
@@ -133,6 +134,7 @@ class _MinersWheelOfFortuneScreenState extends State<MinersWheelOfFortuneScreen>
 
   bool _wheelSpinActive = false;
   int? _currentWinningNumber;
+  bool _routeObserverSubscribed = false;
 
   double _idleRouletteBase = 0;
   double _idleUpBase = 0;
@@ -246,6 +248,26 @@ class _MinersWheelOfFortuneScreenState extends State<MinersWheelOfFortuneScreen>
     _loadBalance();
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_routeObserverSubscribed) {
+      final route = ModalRoute.of(context);
+      if (route != null) {
+        appRouteObserver.subscribe(this, route);
+        _routeObserverSubscribed = true;
+      }
+    }
+  }
+
+  @override
+  void didPopNext() {
+    if (mounted) {
+      setState(() => _lastWin = 0);
+      unawaited(BalanceService.setMinersWheelLastWin(0));
+    }
+  }
+
   void _onBalanceNotifierChanged() {
     if (!mounted) return;
     final v = BalanceService.balanceNotifier.value;
@@ -261,6 +283,7 @@ class _MinersWheelOfFortuneScreenState extends State<MinersWheelOfFortuneScreen>
 
   @override
   void dispose() {
+    appRouteObserver.unsubscribe(this);
     BalanceService.balanceNotifier.removeListener(_onBalanceNotifierChanged);
     _adjustTimer?.cancel();
     _winOverlayTimer?.cancel();
@@ -275,7 +298,6 @@ class _MinersWheelOfFortuneScreenState extends State<MinersWheelOfFortuneScreen>
 
   Future<void> _loadBalance() async {
     final value = await BalanceService.getBalance();
-    final savedLastWin = await BalanceService.getMinersWheelLastWin();
     final initialBet = value > 0
         ? (value * 0.05).round().clamp(_minBet, value)
         : _minBet;
@@ -285,7 +307,7 @@ class _MinersWheelOfFortuneScreenState extends State<MinersWheelOfFortuneScreen>
       _displayBalance = value;
       _balanceAnimFrom = value.toDouble();
       _bet = initialBet;
-      _lastWin = savedLastWin ?? 0;
+      _lastWin = 0;
       _loadingBalance = false;
     });
     unawaited(BalanceService.setLastBet(initialBet));

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'app_route_observer.dart';
 import 'screens/launch_screen.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'screens/onboarding_screen.dart';
@@ -88,6 +89,7 @@ class _GoldMineTrollsAppState extends State<GoldMineTrollsApp>
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Gold Mine Trolls',
+      navigatorObservers: [appRouteObserver],
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.amber),

@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:gold_mine_trolls/app_route_observer.dart';
 import 'package:gold_mine_trolls/screens/info_screen.dart';
 import 'package:gold_mine_trolls/widgets/miners_pass_button.dart';
 import 'package:gold_mine_trolls/screens/shop_screen.dart';
@@ -22,7 +23,7 @@ class TreasureTrailLadderScreen extends StatefulWidget {
 }
 
 class _TreasureTrailLadderScreenState extends State<TreasureTrailLadderScreen>
-    with TickerProviderStateMixin {
+    with TickerProviderStateMixin, RouteAware {
   static const _gameName = 'treasure_trail_ladder';
   static const _minBet = 50;
   static const _baseBet = 10000;
@@ -79,6 +80,7 @@ class _TreasureTrailLadderScreenState extends State<TreasureTrailLadderScreen>
   );
   final Set<int> _revealed = <int>{};
   final Set<int> _selected = <int>{};
+  bool _routeObserverSubscribed = false;
 
   @override
   void initState() {
@@ -116,6 +118,23 @@ class _TreasureTrailLadderScreenState extends State<TreasureTrailLadderScreen>
     _loadBalance();
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_routeObserverSubscribed) {
+      final route = ModalRoute.of(context);
+      if (route != null) {
+        appRouteObserver.subscribe(this, route);
+        _routeObserverSubscribed = true;
+      }
+    }
+  }
+
+  @override
+  void didPopNext() {
+    if (mounted) setState(() => _potentialWin = 0);
+  }
+
   void _onBalanceNotifierChanged() {
     if (!mounted) return;
     final v = BalanceService.balanceNotifier.value;
@@ -131,6 +150,7 @@ class _TreasureTrailLadderScreenState extends State<TreasureTrailLadderScreen>
 
   @override
   void dispose() {
+    appRouteObserver.unsubscribe(this);
     _adjustTimer?.cancel();
     _loseOverlayTimer?.cancel();
     _winOverlayAutoHideTimer?.cancel();

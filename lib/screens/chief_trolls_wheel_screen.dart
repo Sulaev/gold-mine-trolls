@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:gold_mine_trolls/app_route_observer.dart';
 import 'package:gold_mine_trolls/widgets/miners_pass_button.dart';
 import 'package:gold_mine_trolls/screens/shop_screen.dart';
 import 'package:gold_mine_trolls/services/analytics_service.dart';
@@ -20,7 +21,7 @@ class ChiefTrollsWheelScreen extends StatefulWidget {
 }
 
 class _ChiefTrollsWheelScreenState extends State<ChiefTrollsWheelScreen>
-    with TickerProviderStateMixin {
+    with TickerProviderStateMixin, RouteAware {
   static const _gameName = 'chief_trolls_wheel';
   static const _minBet = 50;
   static const _baseBet = 10000;
@@ -49,6 +50,7 @@ class _ChiefTrollsWheelScreenState extends State<ChiefTrollsWheelScreen>
   int _overlayTargetWin = 0;
   int _overlayAnimatedWin = 0;
   int _spinCount = 0;
+  bool _routeObserverSubscribed = false;
   // Clockwise zones starting from the sector near top-left.
   static const _zoneMultipliers = <double>[
     0,
@@ -107,6 +109,23 @@ class _ChiefTrollsWheelScreenState extends State<ChiefTrollsWheelScreen>
     _loadBalance();
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_routeObserverSubscribed) {
+      final route = ModalRoute.of(context);
+      if (route != null) {
+        appRouteObserver.subscribe(this, route);
+        _routeObserverSubscribed = true;
+      }
+    }
+  }
+
+  @override
+  void didPopNext() {
+    if (mounted) setState(() => _lastWinAmount = 0);
+  }
+
   void _onBalanceNotifierChanged() {
     if (!mounted) return;
     final v = BalanceService.balanceNotifier.value;
@@ -122,6 +141,7 @@ class _ChiefTrollsWheelScreenState extends State<ChiefTrollsWheelScreen>
 
   @override
   void dispose() {
+    appRouteObserver.unsubscribe(this);
     _adjustTimer?.cancel();
     _winOverlayAutoHideTimer?.cancel();
     _adjustWatch?.stop();

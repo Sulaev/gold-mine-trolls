@@ -5,6 +5,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart' show Ticker;
 import 'package:flutter/services.dart';
+import 'package:gold_mine_trolls/app_route_observer.dart';
 import 'package:gold_mine_trolls/services/analytics_service.dart';
 import 'package:gold_mine_trolls/services/audio_service.dart';
 import 'package:gold_mine_trolls/services/balance_service.dart';
@@ -20,7 +21,7 @@ class MineDepthTowerScreen extends StatefulWidget {
 }
 
 class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
-    with TickerProviderStateMixin {
+    with TickerProviderStateMixin, RouteAware {
   static const _gameName = 'mine_depth_tower';
   static const _betStep = 50;
   static const _minBet = 50;
@@ -238,6 +239,7 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
   final GlobalKey _fieldKey = GlobalKey();
   final GlobalKey _foundationKey = GlobalKey();
   final GlobalKey _hangingRoomKey = GlobalKey();
+  bool _routeObserverSubscribed = false;
 
   @override
   void initState() {
@@ -313,7 +315,25 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_routeObserverSubscribed) {
+      final route = ModalRoute.of(context);
+      if (route != null) {
+        appRouteObserver.subscribe(this, route);
+        _routeObserverSubscribed = true;
+      }
+    }
+  }
+
+  @override
+  void didPopNext() {
+    if (mounted) setState(() => _lastWinAmount = 0);
+  }
+
+  @override
   void dispose() {
+    appRouteObserver.unsubscribe(this);
     _adjustTimer?.cancel();
     _loseOverlayTimer?.cancel();
     _winOverlayTimer?.cancel();

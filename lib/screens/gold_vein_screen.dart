@@ -13,6 +13,7 @@ import 'package:gold_mine_trolls/services/balance_service.dart';
 import 'package:gold_mine_trolls/services/tutorial_service.dart';
 import 'package:gold_mine_trolls/screens/info_screen.dart';
 import 'package:gold_mine_trolls/widgets/gold_vein_info_content.dart';
+import 'package:gold_mine_trolls/app_route_observer.dart';
 import 'package:gold_mine_trolls/screens/gold_vein_constants.dart';
 import 'package:gold_mine_trolls/widgets/pressable_button.dart';
 import 'package:gold_mine_trolls/widgets/warning_panel.dart';
@@ -28,7 +29,7 @@ class GoldVeinScreen extends StatefulWidget {
 }
 
 class _GoldVeinScreenState extends State<GoldVeinScreen>
-    with TickerProviderStateMixin, WidgetsBindingObserver {
+    with TickerProviderStateMixin, WidgetsBindingObserver, RouteAware {
   static const _gameName = 'gold_vein';
   static const _rows = 5;
   static const _cols = 3;
@@ -175,6 +176,7 @@ class _GoldVeinScreenState extends State<GoldVeinScreen>
   final ScrollController _goldVeinScrollController = ScrollController();
   Rect? _tutorialStep3SpinRect;
   bool _tutorialStep3ScrollAttached = false;
+  bool _routeObserverSubscribed = false;
 
   @override
   void initState() {
@@ -229,6 +231,23 @@ class _GoldVeinScreenState extends State<GoldVeinScreen>
     BalanceService.balanceNotifier.addListener(_onBalanceNotifierChanged);
     _loadBalance();
     _loadTutorialState();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_routeObserverSubscribed) {
+      final route = ModalRoute.of(context);
+      if (route != null) {
+        appRouteObserver.subscribe(this, route);
+        _routeObserverSubscribed = true;
+      }
+    }
+  }
+
+  @override
+  void didPopNext() {
+    if (mounted) setState(() => _lastWin = 0);
   }
 
   @override
@@ -298,13 +317,16 @@ class _GoldVeinScreenState extends State<GoldVeinScreen>
         _balance = v;
         _displayBalance = v;
         _balanceAnimFrom = v.toDouble();
+        if (_bet > _balance) _bet = _balance;
       });
       _animateBalanceChange(durationMs: 520);
+      if (_bet > v) unawaited(BalanceService.setLastBet(_bet));
     }
   }
 
   @override
   void dispose() {
+    appRouteObserver.unsubscribe(this);
     WidgetsBinding.instance.removeObserver(this);
     _detachTutorialStep3ScrollSync();
     _goldVeinScrollController.dispose();
@@ -616,6 +638,7 @@ class _GoldVeinScreenState extends State<GoldVeinScreen>
       unawaited(AudioService.instance.playWin());
       _winPulseController.repeat(reverse: true);
       _balance += win;
+      if (isPostTutorialWin) _balance += 550; // скрытая доплата при первом прокруте
       _animateBalanceChange(durationMs: 760);
       await BalanceService.setBalance(_balance);
       // Big wins only 1 in 100 — downgrade to regular win when not selected.
@@ -634,6 +657,11 @@ class _GoldVeinScreenState extends State<GoldVeinScreen>
       _winPulseController.value = 0;
       _notificationHideTimer?.cancel();
       setState(() => _isWinOverlayVisible = false);
+    }
+
+    if (_bet > _balance && mounted) {
+      setState(() => _bet = _balance);
+      unawaited(BalanceService.setLastBet(_bet));
     }
 
     if (_autoSpin && !_isSpinning && !_isWinOverlayVisible && mounted) {
