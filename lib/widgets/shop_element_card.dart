@@ -58,7 +58,7 @@ class ShopElementCard extends StatelessWidget {
               ),
             ),
             Positioned(
-              top: (34 + contentTopOffset) * _s,
+              top: (31 + contentTopOffset) * _s,
               left: 0,
               right: 0,
               child: Column(
@@ -70,7 +70,7 @@ class ShopElementCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
                       Transform.translate(
-                        offset: const Offset(0, 2),
+                        offset: const Offset(0, 0),
                         child: SizedBox(
                           width: 28 * _s,
                           height: 28 * _s,

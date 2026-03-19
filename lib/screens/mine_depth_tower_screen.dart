@@ -382,7 +382,7 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
     ];
     for (final asset in assets) {
       try {
-        await precacheImage(AssetImage(asset), context);
+      await precacheImage(AssetImage(asset), context);
       } catch (_) {}
     }
   }
@@ -840,7 +840,7 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
     _failPhysActive = false;
     _losePanelController.reset();
     _winFadeController.reset();
-    setState(() {
+      setState(() {
       _placedRooms.clear();
       _roundActive = false;
       _isDropping = false;
@@ -889,7 +889,7 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
     _winCountController.stop();
     _overlayTargetWin = _currentRoundWinAmount;
     _overlayAnimatedWin = 0;
-    setState(() {
+      setState(() {
       _roundActive = false;
       _isWinning = true;
       _lastWinAmount = _currentRoundWinAmount;
@@ -908,13 +908,13 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
     _winOverlayTimer = Timer(const Duration(milliseconds: 2800), () {
       if (!mounted) return;
       _dismissWinOverlay();
-    });
+      });
   }
 
   void _onFailFallAnimationComplete() {
-    if (!mounted) return;
+      if (!mounted) return;
     _loseOverlayTimer?.cancel();
-    setState(() {
+      setState(() {
       _placedRooms.clear();
       _failPhysRoom = null;
       _failAngleRad = 0;
@@ -948,7 +948,7 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
 
   void _startRound() {
     _sinkController.reset();
-    setState(() {
+      setState(() {
       _placedRooms.clear();
       _roundActive = true;
       _isFailing = false;
@@ -1010,7 +1010,7 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
     final failDirection = currentCenter >= supportCenter ? 1.0 : -1.0;
 
     if (!success) {
-      setState(() {
+    setState(() {
         if (_placedRooms.isEmpty) _balance -= _bet;
         _roundActive = false;
         _isDropping = false;
@@ -1051,9 +1051,9 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
       });
       _failPhysicsTicker!.start();
       unawaited(AnalyticsService.reportGameLoss(_gameName));
-      HapticFeedback.lightImpact();
+    HapticFeedback.lightImpact();
       return;
-    }
+  }
 
     final to = _roomTargetTopLeft(room, from.dx, scale);
 
@@ -1161,23 +1161,23 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
         height: 86 * scale,
         child: Stack(
           alignment: Alignment.center,
-          children: [
+        children: [
             Align(
               alignment: Alignment.centerLeft,
               child: PressableButton(
-                onTap: () {
-                  HapticFeedback.lightImpact();
-                  Navigator.of(context).pop();
-                },
-                child: SizedBox(
-                  width: 38 * scale,
-                  height: 38 * scale,
-                  child: Image.asset(
-                    'assets/images/gold_vein/back_btn.png',
-                    fit: BoxFit.contain,
-                  ),
-                ),
+            onTap: () {
+              HapticFeedback.lightImpact();
+              Navigator.of(context).pop();
+            },
+            child: SizedBox(
+              width: 38 * scale,
+              height: 38 * scale,
+              child: Image.asset(
+                'assets/images/gold_vein/back_btn.png',
+                fit: BoxFit.contain,
               ),
+            ),
+          ),
             ),
             _buildBalance(scale),
           ],
@@ -1210,11 +1210,11 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
                   Transform.translate(
                     offset: const Offset(0, 2),
                     child: SizedBox(
-                      width: 22 * scale,
-                      height: 22 * scale,
-                      child: Image.asset(
-                        'assets/images/main_screen/coin_icon.png',
-                        fit: BoxFit.contain,
+                    width: 22 * scale,
+                    height: 22 * scale,
+                    child: Image.asset(
+                      'assets/images/main_screen/coin_icon.png',
+                      fit: BoxFit.contain,
                       ),
                     ),
                   ),
@@ -1263,42 +1263,42 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
             child: SizedBox(
               width: _multiplierPlateWidth * scale,
               height: _multiplierPlateHeight * scale,
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  Image.asset(
-                    'assets/images/mine_depth_tower/standart.png',
-                    fit: BoxFit.fill,
-                  ),
-                  Text(
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                Image.asset(
+                  'assets/images/mine_depth_tower/standart.png',
+                  fit: BoxFit.fill,
+                ),
+                Text(
                     text,
-                    style: TextStyle(
-                      fontFamily: 'Gotham',
-                      fontWeight: FontWeight.w900,
-                      fontSize: fontSize,
+                  style: TextStyle(
+                    fontFamily: 'Gotham',
+                    fontWeight: FontWeight.w900,
+                    fontSize: fontSize,
                       height: 1.2,
-                      foreground: Paint()
-                        ..style = PaintingStyle.stroke
-                        ..strokeWidth = strokeWidth
-                        ..color = const Color(0x40000000),
+                    foreground: Paint()
+                      ..style = PaintingStyle.stroke
+                      ..strokeWidth = strokeWidth
+                      ..color = const Color(0x40000000),
+                  ),
+                ),
+                Text(
+                    text,
+                  style: TextStyle(
+                    fontFamily: 'Gotham',
+                    fontWeight: FontWeight.w900,
+                    fontSize: fontSize,
+                      height: 1.2,
+                    color: const Color(0xFFF3FF45),
+                    ),
+                      ),
+                    ],
+                  ),
+                ),
+                      ),
                     ),
                   ),
-                  Text(
-                    text,
-                    style: TextStyle(
-                      fontFamily: 'Gotham',
-                      fontWeight: FontWeight.w900,
-                      fontSize: fontSize,
-                      height: 1.2,
-                      color: const Color(0xFFF3FF45),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
     );
   }
 
@@ -1403,14 +1403,14 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
     return Positioned(
       left: pivotX - rigWidth / 2,
       top: hookTop,
-      child: AnimatedBuilder(
+        child: AnimatedBuilder(
         animation: _roomMoveController,
-        builder: (context, child) {
+          builder: (context, child) {
           final angle = _currentSwingAngle();
           return Transform.rotate(
             angle: angle,
             alignment: Alignment.topCenter,
-            child: SizedBox(
+          child: SizedBox(
               width: rigWidth,
               height: roomTopForRoom + roomSize.height,
               child: Stack(
@@ -1422,12 +1422,12 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
                     child: SizedBox(
                       width: hookW,
                       height: hookH,
-                      child: Image.asset(
+            child: Image.asset(
                         'assets/images/mine_depth_tower/cruck.png',
                         fit: BoxFit.fill,
-                      ),
-                    ),
-                  ),
+            ),
+          ),
+        ),
                   Positioned(
                     top: trossTop,
                     left: (rigWidth - trossW) / 2,
@@ -1462,9 +1462,9 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
                         ),
                       ),
                     ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
             ),
           );
         },
@@ -1482,16 +1482,16 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
       child: Transform.rotate(
         angle: _failAngleRad,
         alignment: Alignment.bottomCenter,
-        child: SizedBox(
+                        child: SizedBox(
           width: vis.width,
           height: vis.height,
-          child: Image.asset(
+                          child: Image.asset(
             room.asset,
             fit: BoxFit.contain,
             errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
-          ),
-        ),
-      ),
+                          ),
+                        ),
+                      ),
     );
   }
 
@@ -1508,10 +1508,10 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
         final dy = from.dy + (to.dy - from.dy) * t;
         return Positioned(left: dx, top: dy, child: child!);
       },
-      child: SizedBox(
+                        child: SizedBox(
         width: roomSize.width,
         height: roomSize.height,
-        child: Image.asset(
+                          child: Image.asset(
           room.asset,
           fit: BoxFit.contain,
           errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
@@ -1548,21 +1548,21 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
                 children: [
                   Positioned(
                     left: -12 * scale,
-                    child: PressableButton(
+              child: PressableButton(
                       onTap: () => _applyBetDelta(-_betStep),
                       onLongPressStart: (_) => _startContinuousBetAdjust(-1),
                       onLongPressEnd: (_) => _stopContinuousBetAdjust(),
                       onLongPressCancel: _stopContinuousBetAdjust,
-                      child: SizedBox(
+                child: SizedBox(
                         width: 29 * scale,
                         height: 52 * scale,
-                        child: Image.asset(
+                  child: Image.asset(
                           'assets/images/gold_vein/minus_btn.png',
-                          fit: BoxFit.fill,
-                        ),
-                      ),
-                    ),
+                    fit: BoxFit.fill,
                   ),
+                ),
+              ),
+            ),
                   Positioned(
                     right: -12 * scale,
                     child: PressableButton(
@@ -1570,23 +1570,23 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
                       onLongPressStart: (_) => _startContinuousBetAdjust(1),
                       onLongPressEnd: (_) => _stopContinuousBetAdjust(),
                       onLongPressCancel: _stopContinuousBetAdjust,
-                      child: SizedBox(
-                        width: 29 * scale,
-                        height: 52 * scale,
-                        child: Image.asset(
+                  child: SizedBox(
+                    width: 29 * scale,
+                    height: 52 * scale,
+                    child: Image.asset(
                           'assets/images/gold_vein/plus_btn.png',
-                          fit: BoxFit.fill,
-                        ),
-                      ),
+                      fit: BoxFit.fill,
                     ),
+                  ),
+                ),
                   ),
                   Center(
                     child: Transform.translate(
                       offset: const Offset(0, 2),
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
                           Text(
                             'YOUR BET:',
                             textAlign: TextAlign.center,
@@ -1611,20 +1611,20 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
                                   child: SizedBox(
                                     width: 22 * scale,
                                     height: 22 * scale,
-                                    child: Image.asset(
-                                      'assets/images/shop/coin_icon.png',
-                                      fit: BoxFit.contain,
+                      child: Image.asset(
+                        'assets/images/shop/coin_icon.png',
+                        fit: BoxFit.contain,
                                     ),
-                                  ),
-                                ),
-                              SizedBox(width: 6 * scale),
-                              _buildOutlinedValue(
-                                _formatAmount(_bet),
+                      ),
+                    ),
+                    SizedBox(width: 6 * scale),
+                    _buildOutlinedValue(
+                      _formatAmount(_bet),
                                 size: (_bet > 999999 ? 19 : 20) * scale,
                                 letterSpacing: -0.04 * (_bet > 999999 ? 19 : 20) * scale,
-                              ),
-                            ],
-                          ),
+                    ),
+                  ],
+                ),
                         ),
                         ],
                       ),
@@ -1639,17 +1639,17 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
             left: (161 - 132) / 2 * scale,
             child: PressableButton(
               onTap: _setMaxBet,
-              child: SizedBox(
+                  child: SizedBox(
                 width: 132 * scale,
                 height: 29 * scale,
-                child: Image.asset(
+                    child: Image.asset(
                   'assets/images/gold_vein/maxbet_btn.png',
-                  fit: BoxFit.fill,
+                      fit: BoxFit.fill,
                 ),
-              ),
-            ),
-          ),
-        ],
+                    ),
+                  ),
+                ),
+              ],
       ),
     );
   }
@@ -1699,7 +1699,7 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
                 ),
               ],
             ),
-          ),
+            ),
         ],
       ),
     );
@@ -1734,9 +1734,9 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
         offset: Offset(0, 4.83 * scale),
         blurRadius: 0,
       );
-      return Stack(
+          return Stack(
         alignment: Alignment.center,
-        children: [
+            children: [
           Text(
             text,
             textAlign: TextAlign.center,
@@ -1773,7 +1773,7 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
-        children: [
+                  children: [
           SizedBox(
             width: bannerWidth,
             child: Center(child: outlinedText('YOU WIN!', smallTitle)),
@@ -1817,10 +1817,10 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
       opacity: fade,
       child: SafeArea(
         child: Column(
-          children: [
+                      children: [
             SizedBox(height: 4 * scale),
-            _buildTopBar(scale),
-            Expanded(
+                        _buildTopBar(scale),
+                        Expanded(
               child: Center(
                 child: SizedBox(
                   width: _loseCardWidth * scale,
@@ -1833,9 +1833,9 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
               ),
             ),
             SizedBox(height: 18 * scale),
-          ],
-        ),
-      ),
+                  ],
+                ),
+              ),
     );
   }
 
@@ -1850,18 +1850,18 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
         child: SafeArea(
           child: Stack(
             children: [
-              Positioned.fill(
-                child: GestureDetector(
+                Positioned.fill(
+                  child: GestureDetector(
                   onTap: () {
                     HapticFeedback.lightImpact();
                     _dismissWinOverlay();
                   },
-                  behavior: HitTestBehavior.opaque,
+                    behavior: HitTestBehavior.opaque,
                   child: Container(color: const Color(0x66000000)),
                 ),
               ),
               _buildMultiplierPlate(scale),
-              Center(
+                        Center(
                 child: ScaleTransition(
                   scale: Tween<double>(begin: 0.94, end: 1).animate(
                     CurvedAnimation(
@@ -1870,18 +1870,18 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
                     ),
                   ),
                   child: _buildWinOverlay(context, scale),
-                ),
-              ),
-              Positioned(
+                          ),
+                        ),
+                        Positioned(
                 top: 4 * scale,
-                left: 0,
-                right: 0,
+                          left: 0,
+                          right: 0,
                 child: _buildTopBar(scale),
               ),
             ],
-          ),
-        ),
-      ),
+                              ),
+                            ),
+                          ),
     );
   }
 
@@ -1889,7 +1889,7 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
     const topBarHeight = 86.0;
     return SafeArea(
       child: Stack(
-        children: [
+                            children: [
           Column(
             children: [
               SizedBox(height: (4 + topBarHeight) * scale),
@@ -1901,9 +1901,9 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
                       child: Center(child: _buildGameField(scale)),
                     ),
                     _buildMultiplierPlate(scale),
-                  ],
-                ),
-              ),
+                            ],
+                          ),
+                        ),
               Padding(
                 padding: EdgeInsets.only(bottom: 14 * scale),
                 child: Transform.translate(
@@ -1936,12 +1936,12 @@ class _MineDepthTowerScreenState extends State<MineDepthTowerScreen>
           final scale = _gameLayoutScale;
           return Stack(
             children: [
-              Positioned.fill(
-                child: Image.asset(
+                Positioned.fill(
+                      child: Image.asset(
                   'assets/images/mine_depth_tower/bg_start.png',
-                  fit: BoxFit.cover,
-                ),
-              ),
+                        fit: BoxFit.cover,
+                      ),
+                    ),
               if (_isFailing)
                 _buildLoseContent(scale)
               else ...[

@@ -4,14 +4,13 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
-import 'package:gold_mine_trolls/screens/miners_pass_screen.dart';
+import 'package:gold_mine_trolls/widgets/miners_pass_button.dart';
 import 'package:gold_mine_trolls/screens/shop_screen.dart';
 import 'package:gold_mine_trolls/services/analytics_service.dart';
 import 'package:gold_mine_trolls/services/audio_service.dart';
 import 'package:gold_mine_trolls/services/balance_service.dart';
 import 'package:gold_mine_trolls/services/settings_service.dart';
 import 'package:gold_mine_trolls/widgets/pressable_button.dart';
-import 'package:gold_mine_trolls/widgets/tap_banner.dart';
 import 'package:gold_mine_trolls/widgets/warning_panel.dart';
 
 enum _CoeffMode { low, medium, high }
@@ -52,8 +51,8 @@ class _GoldenAvalancheScreenState extends State<GoldenAvalancheScreen>
   static const _multipliersLow = [1.2, 0.3, 1.5, 0.1, 1.2, 0.1, 1.5, 0.3, 1.2];
   // Normal: edge X1.5, X0.5, X1.5, X0.1, center X1.5
   static const _multipliersMedium = [1.5, 0.5, 1.5, 0.1, 1.5, 0.1, 1.5, 0.5, 1.5];
-  // High: edge X3.0, X0.8, X1.5, X0.05, center X1.5
-  static const _multipliersHigh = [3.0, 0.8, 1.5, 0.05, 1.5, 0.05, 1.5, 0.8, 3.0];
+  // High: edge X3.0, X0.8, X0.8, X0.05, center X0.8
+  static const _multipliersHigh = [3.0, 0.8, 0.8, 0.05, 0.8, 0.05, 0.8, 0.8, 3.0];
 
   final _rng = Random();
   late final AnimationController _balanceCountController;
@@ -545,23 +544,13 @@ class _GoldenAvalancheScreenState extends State<GoldenAvalancheScreen>
           ),
           SizedBox(width: 42 * scale),
           SizedBox(
-            width: 154 * scale * 0.85,
-            height: 80 * scale * 0.85,
-            child: TapBanner(
-              bannerAsset: 'assets/images/shop/banner_miner_pass.png',
-              width: 154 * scale * 0.85,
-              height: 80 * scale * 0.85,
-              tapScale: 0.558,
-              tapOffset: const Offset(35, 59),
-              onTap: () {
-                HapticFeedback.lightImpact();
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) =>
-                        const MinersPassScreen(source: 'golden_avalanche'),
-                  ),
-                );
-              },
+            width: 172 * scale,
+            height: 90 * scale,
+            child: MinersPassButton(
+              width: 172 * scale,
+              height: 90 * scale,
+              scale: scale,
+              source: 'golden_avalanche',
             ),
           ),
           SizedBox(width: 42 * scale),
@@ -991,10 +980,11 @@ class _GoldenAvalancheScreenState extends State<GoldenAvalancheScreen>
 
   Widget _buildMultiplierText(double mult, double scale) {
     final size = _multiplierTextSize * scale;
+    final multStr = 'X${mult.toStringAsFixed(1)}';
     return Stack(
       children: [
         Text(
-          'x${mult == 3.0 ? '3.0' : mult.toStringAsFixed(mult == mult.roundToDouble() ? 0 : 1)}',
+          multStr,
           style: TextStyle(
             fontFamily: 'Gotham',
             fontWeight: FontWeight.w900,
@@ -1008,7 +998,7 @@ class _GoldenAvalancheScreenState extends State<GoldenAvalancheScreen>
           ),
         ),
         Text(
-          'x${mult == 3.0 ? '3.0' : mult.toStringAsFixed(mult == mult.roundToDouble() ? 0 : 1)}',
+          multStr,
           style: TextStyle(
             fontFamily: 'Gotham',
             fontWeight: FontWeight.w900,

@@ -4,13 +4,12 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:gold_mine_trolls/screens/miners_pass_screen.dart';
+import 'package:gold_mine_trolls/widgets/miners_pass_button.dart';
 import 'package:gold_mine_trolls/screens/shop_screen.dart';
 import 'package:gold_mine_trolls/services/analytics_service.dart';
 import 'package:gold_mine_trolls/services/audio_service.dart';
 import 'package:gold_mine_trolls/services/balance_service.dart';
 import 'package:gold_mine_trolls/widgets/pressable_button.dart';
-import 'package:gold_mine_trolls/widgets/tap_banner.dart';
 import 'package:gold_mine_trolls/widgets/warning_panel.dart';
 
 class ChiefTrollsWheelScreen extends StatefulWidget {
@@ -583,23 +582,13 @@ class _ChiefTrollsWheelScreenState extends State<ChiefTrollsWheelScreen>
           ),
           SizedBox(width: 42 * scale),
           SizedBox(
-            width: 154 * scale * 0.85,
-            height: 80 * scale * 0.85,
-            child: TapBanner(
-              bannerAsset: 'assets/images/shop/banner_miner_pass.png',
-              width: 154 * scale * 0.85,
-              height: 80 * scale * 0.85,
-              tapScale: 0.558,
-              tapOffset: const Offset(35, 59),
-              onTap: () {
-                HapticFeedback.lightImpact();
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) =>
-                        const MinersPassScreen(source: 'chief_trolls_wheel'),
-                  ),
-                );
-              },
+            width: 172 * scale,
+            height: 90 * scale,
+            child: MinersPassButton(
+              width: 172 * scale,
+              height: 90 * scale,
+              scale: scale,
+              source: 'chief_trolls_wheel',
             ),
           ),
           SizedBox(width: 42 * scale),

@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:gold_mine_trolls/services/daily_bonus_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:gold_mine_trolls/assets/common_assets.dart';
+import 'package:gold_mine_trolls/legal_links.dart';
 import 'package:gold_mine_trolls/services/audio_service.dart';
 import 'package:gold_mine_trolls/widgets/pressable_button.dart';
 import 'package:gold_mine_trolls/widgets/warning_panel.dart';
@@ -451,17 +452,48 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 children: [
                   _buildCheckbox(),
                   const SizedBox(width: 8),
-                  Text(
-                  'TERMS OF USE | PRIVACY POLICY',
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.gothicA1(
-                    color: Colors.white.withValues(alpha: 0.9),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    height: 1.6,
-                    letterSpacing: 0,
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      GestureDetector(
+                        onTap: () => LegalLinks.openTermsOfUse(),
+                        child: Text(
+                          'TERMS OF USE',
+                          style: GoogleFonts.gothicA1(
+                            color: Colors.white.withValues(alpha: 0.9),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            height: 1.6,
+                            letterSpacing: 0,
+                            decoration: TextDecoration.underline,
+                          ),
+                        ),
+                      ),
+                      Text(
+                        ' | ',
+                        style: GoogleFonts.gothicA1(
+                          color: Colors.white.withValues(alpha: 0.9),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          height: 1.6,
+                        ),
+                      ),
+                      GestureDetector(
+                        onTap: () => LegalLinks.openPrivacyPolicy(),
+                        child: Text(
+                          'PRIVACY POLICY',
+                          style: GoogleFonts.gothicA1(
+                            color: Colors.white.withValues(alpha: 0.9),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            height: 1.6,
+                            letterSpacing: 0,
+                            decoration: TextDecoration.underline,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ),
               ],
             ),
             ),

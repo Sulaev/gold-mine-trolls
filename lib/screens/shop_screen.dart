@@ -7,6 +7,7 @@ import 'package:gold_mine_trolls/services/balance_service.dart';
 import 'package:gold_mine_trolls/services/settings_service.dart';
 import 'package:gold_mine_trolls/widgets/shop_element_card.dart';
 import 'package:gold_mine_trolls/widgets/pressable_button.dart';
+import 'package:gold_mine_trolls/legal_links.dart';
 import 'package:gold_mine_trolls/widgets/tap_banner.dart';
 
 /// Shop modal — appears over the main screen with darkened background
@@ -200,14 +201,20 @@ class _ShopScreenState extends State<ShopScreen> {
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Text(
-                            'PRIVACY POLICY',
-                            style: _shopFooterLinkStyle(s),
+                          GestureDetector(
+                            onTap: () => LegalLinks.openPrivacyPolicy(),
+                            child: Text(
+                              'PRIVACY POLICY',
+                              style: _shopFooterLinkStyle(s),
+                            ),
                           ),
                           SizedBox(width: 16 * s),
-                          Text(
-                            'TERMS OF USE',
-                            style: _shopFooterLinkStyle(s),
+                          GestureDetector(
+                            onTap: () => LegalLinks.openTermsOfUse(),
+                            child: Text(
+                              'TERMS OF USE',
+                              style: _shopFooterLinkStyle(s),
+                            ),
                           ),
                         ],
                       ),

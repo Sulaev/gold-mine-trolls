@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:gold_mine_trolls/assets/common_assets.dart';
 import 'package:gold_mine_trolls/services/analytics_service.dart';
+import 'package:gold_mine_trolls/legal_links.dart';
 import 'package:gold_mine_trolls/widgets/pressable_button.dart';
 
 class MinersPassScreen extends StatefulWidget {
@@ -171,11 +172,17 @@ class _MinersPassScreenState extends State<MinersPassScreen> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        Text('TERMS OF USE', style: _footerLinkStyle(scale)),
+        GestureDetector(
+          onTap: () => LegalLinks.openTermsOfUse(),
+          child: Text('TERMS OF USE', style: _footerLinkStyle(scale)),
+        ),
         SizedBox(width: 16 * s),
         Text('RESTORE', style: _footerLinkStyle(scale)),
         SizedBox(width: 16 * s),
-        Text('PRIVACY POLICY', style: _footerLinkStyle(scale)),
+        GestureDetector(
+          onTap: () => LegalLinks.openPrivacyPolicy(),
+          child: Text('PRIVACY POLICY', style: _footerLinkStyle(scale)),
+        ),
       ],
     );
   }

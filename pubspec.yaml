@@ -38,6 +38,7 @@ dependencies:
   audio_session: ^0.1.25
   just_audio: ^0.9.40
   appmetrica_plugin: ^3.4.0
+  url_launcher: ^6.2.5
 
 dependency_overrides:
   shared_preferences_android: 2.4.12

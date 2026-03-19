@@ -7,14 +7,13 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:gold_mine_trolls/models/blackjack_card.dart';
 import 'package:gold_mine_trolls/models/blackjack_game.dart';
 import 'package:gold_mine_trolls/screens/info_screen.dart';
-import 'package:gold_mine_trolls/screens/miners_pass_screen.dart';
+import 'package:gold_mine_trolls/widgets/miners_pass_button.dart';
 import 'package:gold_mine_trolls/screens/shop_screen.dart';
 import 'package:gold_mine_trolls/services/analytics_service.dart';
 import 'package:gold_mine_trolls/services/audio_service.dart';
 import 'package:gold_mine_trolls/services/balance_service.dart';
 import 'package:gold_mine_trolls/services/card_mine_21_storage.dart';
 import 'package:gold_mine_trolls/widgets/pressable_button.dart';
-import 'package:gold_mine_trolls/widgets/tap_banner.dart';
 import 'package:gold_mine_trolls/widgets/warning_panel.dart';
 
 class CardMine21Screen extends StatefulWidget {
@@ -640,23 +639,13 @@ class _CardMine21ScreenState extends State<CardMine21Screen>
           ),
           SizedBox(width: 42 * scale),
           SizedBox(
-            width: 154 * scale * 0.85,
-            height: 80 * scale * 0.85,
-            child: TapBanner(
-              bannerAsset: 'assets/images/shop/banner_miner_pass.png',
-              width: 154 * scale * 0.85,
-              height: 80 * scale * 0.85,
-              tapScale: 0.558,
-              tapOffset: const Offset(35, 59),
-              onTap: () {
-                HapticFeedback.lightImpact();
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) =>
-                        const MinersPassScreen(source: 'card_mine_21'),
-                  ),
-                );
-              },
+            width: 172 * scale,
+            height: 90 * scale,
+            child: MinersPassButton(
+              width: 172 * scale,
+              height: 90 * scale,
+              scale: scale,
+              source: 'card_mine_21',
             ),
           ),
           SizedBox(width: 42 * scale),

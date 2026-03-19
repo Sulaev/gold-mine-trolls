@@ -5,13 +5,12 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:gold_mine_trolls/screens/info_screen.dart';
-import 'package:gold_mine_trolls/screens/miners_pass_screen.dart';
+import 'package:gold_mine_trolls/widgets/miners_pass_button.dart';
 import 'package:gold_mine_trolls/screens/shop_screen.dart';
 import 'package:gold_mine_trolls/services/analytics_service.dart';
 import 'package:gold_mine_trolls/services/audio_service.dart';
 import 'package:gold_mine_trolls/services/balance_service.dart';
 import 'package:gold_mine_trolls/widgets/pressable_button.dart';
-import 'package:gold_mine_trolls/widgets/tap_banner.dart';
 import 'package:gold_mine_trolls/widgets/warning_panel.dart';
 
 class CautiousMinerScreen extends StatefulWidget {
@@ -317,7 +316,6 @@ class _CautiousMinerScreenState extends State<CautiousMinerScreen>
   Future<void> _onTileTap(int row, int col) async {
     if (_loadingBalance || _isGameOver) return;
     if (!_inRun) {
-      if (row != 0) return;
       await _startRun();
       if (!_inRun || !mounted) return;
     }
@@ -511,23 +509,13 @@ class _CautiousMinerScreenState extends State<CautiousMinerScreen>
           ),
           SizedBox(width: 42 * scale),
           SizedBox(
-            width: 154 * scale * 0.85,
-            height: 80 * scale * 0.85,
-            child: TapBanner(
-              bannerAsset: 'assets/images/shop/banner_miner_pass.png',
-              width: 154 * scale * 0.85,
-              height: 80 * scale * 0.85,
-              tapScale: 0.558,
-              tapOffset: const Offset(35, 59),
-              onTap: () {
-                HapticFeedback.lightImpact();
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) =>
-                        const MinersPassScreen(source: 'cautious_miner'),
-                  ),
-                );
-              },
+            width: 172 * scale,
+            height: 90 * scale,
+            child: MinersPassButton(
+              width: 172 * scale,
+              height: 90 * scale,
+              scale: scale,
+              source: 'cautious_miner',
             ),
           ),
           SizedBox(width: 42 * scale),

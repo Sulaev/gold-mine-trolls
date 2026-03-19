@@ -5,7 +5,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:gold_mine_trolls/screens/miners_pass_screen.dart';
+import 'package:gold_mine_trolls/widgets/miners_pass_button.dart';
 import 'package:gold_mine_trolls/screens/shop_screen.dart';
 import 'package:gold_mine_trolls/services/analytics_service.dart';
 import 'package:gold_mine_trolls/services/audio_service.dart';
@@ -15,7 +15,6 @@ import 'package:gold_mine_trolls/screens/info_screen.dart';
 import 'package:gold_mine_trolls/widgets/gold_vein_info_content.dart';
 import 'package:gold_mine_trolls/screens/gold_vein_constants.dart';
 import 'package:gold_mine_trolls/widgets/pressable_button.dart';
-import 'package:gold_mine_trolls/widgets/tap_banner.dart';
 import 'package:gold_mine_trolls/widgets/warning_panel.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -70,7 +69,7 @@ class _GoldVeinScreenState extends State<GoldVeinScreen>
   int _displayBalance = 0;
   double _balanceAnimFrom = 0;
   int _bet = _baseBet;
-  int _lastWin = 100000;
+  int _lastWin = 0;
   bool _isSpinning = false;
   bool _autoSpin = false;
   int _activeDelta = 0;
@@ -2207,25 +2206,13 @@ class _GoldVeinScreenState extends State<GoldVeinScreen>
                             ),
                             SizedBox(width: 42 * scale),
                             SizedBox(
-                              width: 154 * scale * 0.85,
-                              height: 80 * scale * 0.85,
-                              child: TapBanner(
-                                bannerAsset:
-                                    'assets/images/shop/banner_miner_pass.png',
-                                width: 154 * scale * 0.85,
-                                height: 80 * scale * 0.85,
-                                tapScale: 0.558,
-                                tapOffset: const Offset(35, 59),
-                                onTap: () {
-                                  HapticFeedback.lightImpact();
-                                  Navigator.of(context).push(
-                                    MaterialPageRoute(
-                                      builder: (_) => const MinersPassScreen(
-                                        source: 'gold_vein',
-                                      ),
-                                    ),
-                                  );
-                                },
+                              width: 172 * scale,
+                              height: 90 * scale,
+                              child: MinersPassButton(
+                                width: 172 * scale,
+                                height: 90 * scale,
+                                scale: scale,
+                                source: 'gold_vein',
                               ),
                             ),
                             SizedBox(width: 42 * scale),

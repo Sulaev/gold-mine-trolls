@@ -11,7 +11,6 @@ import 'package:gold_mine_trolls/screens/chief_trolls_wheel_screen.dart';
 import 'package:gold_mine_trolls/screens/golden_avalanche_screen.dart';
 import 'package:gold_mine_trolls/screens/gold_vein_screen.dart';
 import 'package:gold_mine_trolls/screens/mine_depth_tower_screen.dart';
-import 'package:gold_mine_trolls/screens/miners_pass_screen.dart';
 import 'package:gold_mine_trolls/screens/miners_wheel_of_fortune_screen.dart';
 import 'package:gold_mine_trolls/screens/road_of_luck_screen.dart';
 import 'package:gold_mine_trolls/screens/settings_screen.dart';
@@ -22,6 +21,7 @@ import 'package:gold_mine_trolls/services/audio_service.dart';
 import 'package:gold_mine_trolls/services/balance_service.dart';
 import 'package:gold_mine_trolls/services/settings_service.dart';
 import 'package:gold_mine_trolls/services/tutorial_service.dart';
+import 'package:gold_mine_trolls/widgets/miners_pass_button.dart';
 import 'package:gold_mine_trolls/widgets/pressable_button.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -102,15 +102,17 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen>
-    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
+    with TickerProviderStateMixin, WidgetsBindingObserver {
   static const _topIconsTop = 35.0;
   static const _iconGap = 8.0;
-  static const _shopWidth = 115.5;
-  static const _shopHeight = 109.5;
-  static const _roadOfLuckWidth = 90.2;
-  static const _roadOfLuckHeight = 135.3;
-  static const _minersPassWidth = 134.0;
-  static const _minersPassHeight = 70.0;
+  static const _topIconWidth = 132.0;
+  static const _topIconHeight = 88.0;
+  static const _shopWidth = 132.0;
+  static const _shopHeight = 88.0;
+  static const _roadOfLuckWidth = 82.0;
+  static const _roadOfLuckHeight = 122.0;
+  static const _minersPassWidth = 132.0;
+  static const _minersPassHeight = 88.0;
   static const _logoTopGap = 16.0;
   static const _logoWidth = 214.0;
   static const _logoHeight = 79.0;
@@ -171,8 +173,10 @@ class _HomeScreenState extends State<HomeScreen>
   /// Реальная позиция кнопки Gold Vein (для пульса при адаптивной вёрстке).
   final GlobalKey _goldVeinTutorialTargetKey = GlobalKey();
   final GlobalKey _tutorialOverlayStackKey = GlobalKey();
+  final GlobalKey _gamesGridKey = GlobalKey();
   Rect? _tutorialGoldVeinRect;
   bool _tutorialScrollListenerAttached = false;
+  ({double margin, double size, double gap, double verticalGap})? _lastGamesGridLayout;
 
   void _scheduleIdleScrollAfterDelay() {
     _idleScrollDelayTimer?.cancel();
@@ -323,6 +327,29 @@ class _HomeScreenState extends State<HomeScreen>
     });
   }
 
+  /// Open game at touch position when user taps during auto-scroll (one-tap during animation).
+  void _openGameAtScrollTouch(BuildContext context, DragStartDetails details) {
+    final layout = _lastGamesGridLayout;
+    if (layout == null) return;
+    final box = _gamesGridKey.currentContext?.findRenderObject() as RenderBox?;
+    if (box == null || !box.hasSize) return;
+    final local = box.globalToLocal(details.globalPosition);
+    final margin = layout.margin;
+    final size = layout.size;
+    final gap = layout.gap;
+    final verticalGap = layout.verticalGap;
+    final gridHeight = 4 * size + 3 * verticalGap;
+    final gridWidth = 2 * size + gap;
+    if (local.dy < 0 || local.dy >= gridHeight) return;
+    if (local.dx < margin || local.dx >= margin + gridWidth) return;
+    final row = (local.dy / (size + verticalGap)).floor().clamp(0, 3);
+    final col = (local.dx - margin) < (size + gap / 2) ? 0 : 1;
+    final index = row * 2 + col;
+    if (index >= 0 && index < _gameAssets.length) {
+      _onGameTap(context, index);
+    }
+  }
+
   Future<void> _runGamesIdleAutoScrollLoop(int session) async {
     while (mounted &&
         !_showTutorialStepOne &&
@@ -367,7 +394,7 @@ class _HomeScreenState extends State<HomeScreen>
 
   /// Scaled layout: all sizes use scale from LayoutBuilder.
   ({double gap, double scale}) _topIconsLayout(double availableWidth, double scale) {
-    final totalIconWidth = (_shopWidth + _roadOfLuckWidth + _minersPassWidth * 1.452) * scale;
+    final totalIconWidth = (_shopWidth + _roadOfLuckWidth + _minersPassWidth) * scale;
     final minGap = 4.0 * scale;
     final iconGap = _iconGap * scale;
 
@@ -469,66 +496,52 @@ class _HomeScreenState extends State<HomeScreen>
 
   Widget _buildTopIconsRowContent(BuildContext context, double maxWidth, double scale) {
     final layout = _topIconsLayout(maxWidth, scale);
-    final minersPassW = _minersPassWidth * layout.scale * 1.452;
-    final minersPassH = _minersPassHeight * layout.scale * 1.452;
     final shopW = _shopWidth * layout.scale;
     final shopH = _shopHeight * layout.scale;
     final roadW = _roadOfLuckWidth * layout.scale;
     final roadH = _roadOfLuckHeight * layout.scale;
+    final minersW = _minersPassWidth * layout.scale;
+    final minersH = _minersPassHeight * layout.scale;
+    final gap = layout.gap;
     return FittedBox(
       fit: BoxFit.scaleDown,
       alignment: Alignment.center,
       child: SizedBox(
         width: maxWidth,
-        child: Stack(
-          alignment: Alignment.center,
-          clipBehavior: Clip.none,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Positioned(
-              left: 0,
-              child: PressableButton(
-                onTap: () => _openShop(context),
-                child: _buildTopIcon(
-                  'assets/images/main_screen/icon_shop.png',
-                  shopW,
-                  shopH,
-                ),
+            PressableButton(
+              onTap: () => _openShop(context),
+              child: _buildTopIcon(
+                'assets/images/main_screen/icon_shop.png',
+                shopW,
+                shopH,
               ),
             ),
-            Positioned(
-              left: maxWidth - shopW + 10,
-              child: PressableButton(
-                onTap: () {
-                  SettingsService.hapticLightImpact();
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (context) => const RoadOfLuckScreen(),
-                    ),
-                  );
-                },
-                child: _buildTopIcon(
-                  'assets/images/main_screen/icon_road_of_luck.png',
-                  roadW,
-                  roadH,
-                ),
+            SizedBox(width: gap),
+            PressableButton(
+              onTap: () {
+                SettingsService.hapticLightImpact();
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => const RoadOfLuckScreen(),
+                  ),
+                );
+              },
+              child: _buildTopIcon(
+                'assets/images/main_screen/icon_road_of_luck.png',
+                roadW,
+                roadH,
               ),
             ),
-            Center(
-              child: PressableButton(
-                onTap: () {
-                  SettingsService.hapticLightImpact();
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (context) => const MinersPassScreen(source: 'vip'),
-                    ),
-                  );
-                },
-                child: _buildTopIcon(
-                  'assets/images/main_screen/icon_miners_pass.png',
-                  minersPassW,
-                  minersPassH,
-                ),
-              ),
+            SizedBox(width: gap),
+            MinersPassButton(
+              width: minersW,
+              height: minersH,
+              scale: layout.scale,
+              source: 'vip',
             ),
           ],
         ),
@@ -824,8 +837,8 @@ class _HomeScreenState extends State<HomeScreen>
               color: Colors.amber.withValues(alpha: 0.3),
               child: Icon(Icons.casino, size: 48, color: Colors.amber.shade700),
             ),
+            ),
           ),
-        ),
         ),
       ),
     );
@@ -834,7 +847,9 @@ class _HomeScreenState extends State<HomeScreen>
   Widget _buildGamesGridContent(BuildContext context, double scale) {
     final screenWidth = MediaQuery.of(context).size.width;
     final layout = _gamesGridLayout(screenWidth, scale);
+    _lastGamesGridLayout = layout;
     return Padding(
+      key: _gamesGridKey,
       padding: EdgeInsets.symmetric(horizontal: layout.margin),
       child: Column(
         children: [
@@ -1099,7 +1114,11 @@ class _HomeScreenState extends State<HomeScreen>
                 onNotification: (notification) {
                   if (notification is ScrollStartNotification &&
                       notification.dragDetails != null) {
+                    final wasAutoScrolling = _gamesAutoScrollRunning;
                     _pauseGamesAutoScrollForUserInteraction();
+                    if (wasAutoScrolling) {
+                      _openGameAtScrollTouch(context, notification.dragDetails!);
+                    }
                   } else if (notification is ScrollUpdateNotification &&
                       notification.dragDetails != null) {
                     _pauseGamesAutoScrollForUserInteraction();

@@ -3,6 +3,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:gold_mine_trolls/services/audio_service.dart';
 import 'package:gold_mine_trolls/services/settings_service.dart';
+import 'package:gold_mine_trolls/legal_links.dart';
 import 'package:gold_mine_trolls/widgets/pressable_button.dart';
 
 /// Settings modal shown over the current screen.
@@ -417,9 +418,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Text('PRIVACY POLICY', style: _footerLinkStyle()),
+                      GestureDetector(
+                        onTap: () => LegalLinks.openPrivacyPolicy(),
+                        child: Text('PRIVACY POLICY', style: _footerLinkStyle()),
+                      ),
                       SizedBox(width: 16 * _scale),
-                      Text('TERMS OF USE', style: _footerLinkStyle()),
+                      GestureDetector(
+                        onTap: () => LegalLinks.openTermsOfUse(),
+                        child: Text('TERMS OF USE', style: _footerLinkStyle()),
+                      ),
                     ],
                   ),
                 ),
