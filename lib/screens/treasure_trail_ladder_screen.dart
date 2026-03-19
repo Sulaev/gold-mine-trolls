@@ -68,6 +68,8 @@ class _TreasureTrailLadderScreenState extends State<TreasureTrailLadderScreen>
   int _overlayAnimatedWin = 0;
 
   Timer? _adjustTimer;
+  Timer? _loseOverlayTimer;
+  Timer? _winOverlayAutoHideTimer;
   Stopwatch? _adjustWatch;
   int _activeDelta = 0;
 
@@ -131,10 +133,10 @@ class _TreasureTrailLadderScreenState extends State<TreasureTrailLadderScreen>
   @override
   void dispose() {
     _adjustTimer?.cancel();
+    _loseOverlayTimer?.cancel();
+    _winOverlayAutoHideTimer?.cancel();
     _adjustWatch?.stop();
     BalanceService.balanceNotifier.removeListener(_onBalanceNotifierChanged);
-    _adjustTimer?.cancel();
-    _adjustWatch?.stop();
     _balanceCountController.dispose();
     _notificationController.dispose();
     _winCountController.dispose();
@@ -222,7 +224,7 @@ class _TreasureTrailLadderScreenState extends State<TreasureTrailLadderScreen>
     return b.toString();
   }
 
-  Widget _buildOutlinedValue(String value, {double size = 18.58}) {
+  Widget _buildOutlinedValue(String value, {double size = 18.58, double? letterSpacing}) {
     TextStyle valueTextStyle({Color? color, Paint? foreground}) {
       return TextStyle(
         fontFamily: 'Gotham',
@@ -231,7 +233,7 @@ class _TreasureTrailLadderScreenState extends State<TreasureTrailLadderScreen>
         fontSize: size,
         fontWeight: FontWeight.w900,
         height: 1.6,
-        letterSpacing: -0.02 * size,
+        letterSpacing: letterSpacing ?? -0.02 * size,
         shadows: const [
           Shadow(color: _balanceStroke, offset: Offset(0, 1.74), blurRadius: 0),
         ],
@@ -451,6 +453,7 @@ class _TreasureTrailLadderScreenState extends State<TreasureTrailLadderScreen>
     if (_loadingBalance) return;
     if (_isResolvingPick) return;
     if (!_inRun) {
+      if (_isGameOver || row != 0) return;
       await _startRun();
       if (!_inRun || !mounted) return;
     }
@@ -502,10 +505,16 @@ class _TreasureTrailLadderScreenState extends State<TreasureTrailLadderScreen>
       _revealed.clear();
       _isGameOver = true;
     });
+    _loseOverlayTimer?.cancel();
+    _loseOverlayTimer = Timer(const Duration(milliseconds: 1500), () {
+      if (!mounted) return;
+      _restartAfterLose();
+    });
   }
 
   void _restartAfterLose() {
     if (!_isGameOver) return;
+    _loseOverlayTimer?.cancel();
     setState(() {
       _isGameOver = false;
       _inRun = false;
@@ -519,6 +528,7 @@ class _TreasureTrailLadderScreenState extends State<TreasureTrailLadderScreen>
   }
 
   void _showWinOverlay(int amount) {
+    _winOverlayAutoHideTimer?.cancel();
     setState(() {
       _isWinOverlayVisible = true;
       _overlayTargetWin = amount;
@@ -526,6 +536,10 @@ class _TreasureTrailLadderScreenState extends State<TreasureTrailLadderScreen>
     });
     _notificationController.forward(from: 0);
     _winCountController.forward(from: 0);
+    _winOverlayAutoHideTimer = Timer(const Duration(milliseconds: 2000), () {
+      if (!mounted) return;
+      _dismissWinOverlay();
+    });
   }
 
   void _dismissWinOverlay() {
@@ -728,12 +742,15 @@ class _TreasureTrailLadderScreenState extends State<TreasureTrailLadderScreen>
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  SizedBox(
-                    width: 22 * scale,
-                    height: 22 * scale,
-                    child: Image.asset(
-                      'assets/images/main_screen/coin_icon.png',
-                      fit: BoxFit.contain,
+                  Transform.translate(
+                    offset: const Offset(0, 2),
+                    child: SizedBox(
+                      width: 22 * scale,
+                      height: 22 * scale,
+                      child: Image.asset(
+                        'assets/images/main_screen/coin_icon.png',
+                        fit: BoxFit.contain,
+                      ),
                     ),
                   ),
                   SizedBox(width: 6 * scale),
@@ -975,62 +992,74 @@ class _TreasureTrailLadderScreenState extends State<TreasureTrailLadderScreen>
                     ),
                   ),
                 ),
-                Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      'YOUR BET:',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontFamily: 'Montserrat',
-                        fontWeight: FontWeight.w900,
-                        fontSize: 10.5 * scale,
-                      ),
-                    ),
-                    SizedBox(height: 2 * scale),
-                    Transform.translate(
-                      offset: Offset(0, -6 * scale),
-                      child: Center(
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            SizedBox(
-                              width: 24 * scale,
-                              height: 24 * scale,
-                              child: Image.asset(
-                                'assets/images/shop/coin_icon.png',
-                                fit: BoxFit.contain,
-                              ),
-                            ),
-                            SizedBox(width: 6 * scale),
-                            _buildOutlinedValue(
-                              _formatAmount(_bet),
-                              size: 19 * scale,
-                            ),
-                          ],
+                Center(
+                  child: Transform.translate(
+                    offset: const Offset(0, 2),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'YOUR BET:',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontFamily: 'Gotham',
+                            color: Colors.white,
+                            fontWeight: FontWeight.w900,
+                            fontSize: 11.3 * scale,
+                            height: 1.4,
+                            letterSpacing: -0.02 * 11.3 * scale,
+                          ),
                         ),
-                      ),
+                        SizedBox(height: 2 * scale),
+                        Transform.translate(
+                          offset: const Offset(0, -5),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Transform.translate(
+                                offset: const Offset(0, 2),
+                                child: SizedBox(
+                                  width: 22 * scale,
+                                  height: 22 * scale,
+                                  child: Image.asset(
+                                    'assets/images/shop/coin_icon.png',
+                                    fit: BoxFit.contain,
+                                  ),
+                                ),
+                              ),
+                              SizedBox(width: 6 * scale),
+                              _buildOutlinedValue(
+                                _formatAmount(_bet),
+                                size: (_bet > 999999 ? 19 : 20) * scale,
+                                letterSpacing: -0.04 * (_bet > 999999 ? 19 : 20) * scale,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
-              ],
-            ),
+            ],
           ),
         ),
-        SizedBox(width: 16 * scale),
-        PressableButton(
-          onTap: _inRun ? _collect : _startRun,
-          child: SizedBox(
-            width: 110 * scale,
-            height: 62 * scale,
-            child: Image.asset(
-              _inRun
-                  ? 'assets/images/cautious_miner/collect.png'
-                  : 'assets/images/treasure_trail_ladder/start_btn.png',
-              fit: BoxFit.fill,
+      ),
+        if (_inRun) ...[
+          SizedBox(width: 16 * scale),
+          PressableButton(
+            onTap: _collect,
+            child: SizedBox(
+              width: 110 * scale,
+              height: 62 * scale,
+              child: Image.asset(
+                'assets/images/cautious_miner/collect.png',
+                fit: BoxFit.fill,
+              ),
             ),
           ),
-        ),
+        ],
       ],
     );
   }
@@ -1052,6 +1081,7 @@ class _TreasureTrailLadderScreenState extends State<TreasureTrailLadderScreen>
             top: 14 * scale,
             child: Text(
               'YOU WIN:',
+              textAlign: TextAlign.center,
               style: TextStyle(
                 color: Colors.white,
                 fontFamily: 'Montserrat',
@@ -1061,16 +1091,19 @@ class _TreasureTrailLadderScreenState extends State<TreasureTrailLadderScreen>
             ),
           ),
           Positioned(
-            bottom: 26 * scale,
+            bottom: 30 * scale,
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                SizedBox(
-                  width: 24 * scale,
-                  height: 24 * scale,
-                  child: Image.asset(
-                    'assets/images/shop/coin_icon.png',
-                    fit: BoxFit.contain,
+                Transform.translate(
+                  offset: const Offset(0, 2),
+                  child: SizedBox(
+                    width: 24 * scale,
+                    height: 24 * scale,
+                    child: Image.asset(
+                      'assets/images/shop/coin_icon.png',
+                      fit: BoxFit.contain,
+                    ),
                   ),
                 ),
                 SizedBox(width: 6 * scale),
@@ -1157,30 +1190,9 @@ class _TreasureTrailLadderScreenState extends State<TreasureTrailLadderScreen>
                     ),
                   ),
                 ),
-              if (_isGameOver)
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: 26 * scale,
-                  child: Center(
-                    child: PressableButton(
-                      onTap: _restartAfterLose,
-                      child: SizedBox(
-                        width: 205 * scale,
-                        height: 45 * scale,
-                        child: Image.asset(
-                          'assets/images/cautious_miner/trayagain_btn.png',
-                          fit: BoxFit.fill,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
               if (_isWinOverlayVisible)
                 Positioned.fill(
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: _dismissWinOverlay,
+                  child: IgnorePointer(
                     child: FadeTransition(
                       opacity: CurvedAnimation(
                         parent: _notificationController,

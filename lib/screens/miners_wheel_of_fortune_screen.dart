@@ -95,10 +95,12 @@ class _MinersWheelOfFortuneScreenState extends State<MinersWheelOfFortuneScreen>
   static const _balanceStroke = Color(0x40000000);
   static const _balanceFill = Color(0xFFFFFFFF);
   static const _rouletteBackSize = 349.0;
-  static const _rouletteSize = 250.0;
-  static const _rouletteUpSize = 145.0;
-  static const _poleWidth = 327.0;
-  static const _poleHeight = 178.0;
+  /// Меньше круга с цифрами; шар и углы считаются от этого размера.
+  static const _rouletteSize = 228.0;
+  static const _rouletteUpSize = 132.0;
+  /// В той же пропорции к рулетке, что и pole.svg на макете.
+  static const _poleWidth = 298.0;
+  static const _poleHeight = 163.0;
   static const _youWinBannerWidth = 243.0;
   static const _youWinBannerHeight = 36.0;
   static const _wheelZeroAngleOffset = -math.pi / 2;
@@ -199,7 +201,7 @@ class _MinersWheelOfFortuneScreenState extends State<MinersWheelOfFortuneScreen>
     _spinController =
         AnimationController(
           vsync: this,
-          duration: const Duration(milliseconds: 6400),
+          duration: const Duration(milliseconds: 5700),
         )..addStatusListener((status) {
           if (status == AnimationStatus.completed) {
             _idleRouletteBase = _spinRouletteEnd;
@@ -343,6 +345,7 @@ class _MinersWheelOfFortuneScreenState extends State<MinersWheelOfFortuneScreen>
     Color? color,
     Paint? foreground,
     double size = 18.58,
+    double? letterSpacing,
   }) {
     return TextStyle(
       fontFamily: 'Gotham',
@@ -352,20 +355,21 @@ class _MinersWheelOfFortuneScreenState extends State<MinersWheelOfFortuneScreen>
       fontWeight: FontWeight.w900,
       fontStyle: FontStyle.normal,
       height: 1.6,
-      letterSpacing: -0.02 * size,
+      letterSpacing: letterSpacing ?? -0.02 * size,
       shadows: const [
         Shadow(color: _balanceStroke, offset: Offset(0, 1.74), blurRadius: 0),
       ],
     );
   }
 
-  Widget _buildOutlinedValue(String value, {double size = 18.58}) {
+  Widget _buildOutlinedValue(String value, {double size = 18.58, double? letterSpacing}) {
     return Stack(
       children: [
         Text(
           value,
           style: _valueTextStyle(
             size: size,
+            letterSpacing: letterSpacing,
             foreground: Paint()
               ..style = PaintingStyle.stroke
               ..strokeWidth = size * 0.046
@@ -374,7 +378,7 @@ class _MinersWheelOfFortuneScreenState extends State<MinersWheelOfFortuneScreen>
         ),
         Text(
           value,
-          style: _valueTextStyle(size: size, color: _balanceFill),
+          style: _valueTextStyle(size: size, letterSpacing: letterSpacing, color: _balanceFill),
         ),
       ],
     );
@@ -421,17 +425,14 @@ class _MinersWheelOfFortuneScreenState extends State<MinersWheelOfFortuneScreen>
         child: Center(
           child: Row(
             mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.baseline,
-            textBaseline: TextBaseline.alphabetic,
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Text('YOU WIN: ', style: labelStyle),
-              Transform.translate(
-                offset: Offset(0, 2 * scale),
-                child: Text(
-                  _formatWinAmount(_lastWin),
-                  style: amountStyle,
-                  textAlign: TextAlign.center,
-                ),
+              Text(
+                _formatWinAmount(_lastWin),
+                style: amountStyle,
+                textAlign: TextAlign.center,
               ),
             ],
           ),
@@ -450,7 +451,7 @@ class _MinersWheelOfFortuneScreenState extends State<MinersWheelOfFortuneScreen>
     });
     _winCountController.duration = const Duration(milliseconds: 2200);
     _winCountController.forward(from: 0);
-    _winOverlayTimer = Timer(const Duration(seconds: 2), () {
+    _winOverlayTimer = Timer(const Duration(milliseconds: 2000), () {
       if (mounted && _isWinOverlayVisible) {
         _dismissWinOverlay();
       }
@@ -663,7 +664,7 @@ class _MinersWheelOfFortuneScreenState extends State<MinersWheelOfFortuneScreen>
     }
 
     unawaited(AudioService.instance.playButtonClick());
-    unawaited(AudioService.instance.playWheelSpin(6400));
+    unawaited(AudioService.instance.playWheelSpin(5700));
     final betToUse = _bet;
     final selectedSnapshot = Set<RouletteBetKey>.from(_selectedZones);
     final shouldAutoRepeat = _autoSpin;
@@ -751,12 +752,15 @@ class _MinersWheelOfFortuneScreenState extends State<MinersWheelOfFortuneScreen>
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            SizedBox(
-                              width: 22 * scale,
-                              height: 22 * scale,
-                              child: Image.asset(
-                                'assets/images/main_screen/coin_icon.png',
-                                fit: BoxFit.contain,
+                            Transform.translate(
+                              offset: const Offset(0, 2),
+                              child: SizedBox(
+                                width: 22 * scale,
+                                height: 22 * scale,
+                                child: Image.asset(
+                                  'assets/images/main_screen/coin_icon.png',
+                                  fit: BoxFit.contain,
+                                ),
                               ),
                             ),
                             SizedBox(width: 6 * scale),
@@ -949,33 +953,27 @@ class _MinersWheelOfFortuneScreenState extends State<MinersWheelOfFortuneScreen>
                 height: backSize,
                 fit: BoxFit.contain,
               ),
-              Transform.translate(
-                offset: Offset(0, -4 * scale),
-                child: Transform.rotate(
-                  angle: rouletteAngle,
-                  child: Image.asset(
-                    'assets/images/miners_wheel_of_fortune/roulette.png',
-                    width: rouletteSize,
-                    height: rouletteSize,
-                    fit: BoxFit.contain,
-                  ),
+              Transform.rotate(
+                angle: rouletteAngle,
+                child: Image.asset(
+                  'assets/images/miners_wheel_of_fortune/roulette.png',
+                  width: rouletteSize,
+                  height: rouletteSize,
+                  fit: BoxFit.contain,
                 ),
               ),
-              Transform.translate(
-                offset: Offset(0, -4 * scale),
-                child: Transform.rotate(
-                  angle: upAngle,
-                  child: Image.asset(
-                    'assets/images/miners_wheel_of_fortune/roulette_up.png',
-                    width: upSize,
-                    height: upSize,
-                    fit: BoxFit.contain,
-                  ),
+              Transform.rotate(
+                angle: upAngle,
+                child: Image.asset(
+                  'assets/images/miners_wheel_of_fortune/roulette_up.png',
+                  width: upSize,
+                  height: upSize,
+                  fit: BoxFit.contain,
                 ),
               ),
               if (_wheelSpinActive || _currentWinningNumber != null)
                 Transform.translate(
-                  offset: ballCenterOffset + Offset(0, -4 * scale),
+                  offset: ballCenterOffset,
                   child: Container(
                     width: 10 * scale,
                     height: 10 * scale,
@@ -999,6 +997,142 @@ class _MinersWheelOfFortuneScreenState extends State<MinersWheelOfFortuneScreen>
     );
   }
 
+  Widget _buildBetControl(double scale) {
+    return SizedBox(
+      width: 161 * scale,
+      height: 96 * scale,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned(
+            top: 30 * scale,
+            left: 0,
+            right: 0,
+            child: Container(
+              width: 161 * scale,
+              height: 57 * scale,
+              decoration: BoxDecoration(
+                color: const Color(0x66371810),
+                borderRadius: BorderRadius.circular(20 * scale),
+                border: Border.all(
+                  color: const Color(0xFFFFEA4C),
+                  width: 2 * scale,
+                ),
+              ),
+              child: Stack(
+                clipBehavior: Clip.none,
+                alignment: Alignment.center,
+                children: [
+                  Positioned(
+                    left: -12 * scale,
+                    child: PressableButton(
+                      onTap: () => _applyBetDelta(-_betStep),
+                      onLongPressStart: (_) =>
+                          _startContinuousBetAdjust(-1),
+                      onLongPressEnd: (_) => _stopContinuousBetAdjust(),
+                      onLongPressCancel: _stopContinuousBetAdjust,
+                      child: SizedBox(
+                        width: 29 * scale,
+                        height: 52 * scale,
+                        child: Image.asset(
+                          'assets/images/gold_vein/minus_btn.png',
+                          fit: BoxFit.fill,
+                        ),
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    right: -12 * scale,
+                    child: PressableButton(
+                      onTap: () => _applyBetDelta(_betStep),
+                      onLongPressStart: (_) =>
+                          _startContinuousBetAdjust(1),
+                      onLongPressEnd: (_) => _stopContinuousBetAdjust(),
+                      onLongPressCancel: _stopContinuousBetAdjust,
+                      child: SizedBox(
+                        width: 29 * scale,
+                        height: 52 * scale,
+                        child: Image.asset(
+                          'assets/images/gold_vein/plus_btn.png',
+                          fit: BoxFit.fill,
+                        ),
+                      ),
+                    ),
+                  ),
+                  Center(
+                    child: Transform.translate(
+                      offset: const Offset(0, 2),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'YOUR BET:',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontFamily: 'Gotham',
+                              color: Colors.white,
+                              fontWeight: FontWeight.w900,
+                              fontSize: 11.3 * scale,
+                              height: 1.4,
+                              letterSpacing: -0.02 * 11.3 * scale,
+                            ),
+                          ),
+                          SizedBox(height: 2 * scale),
+                          Transform.translate(
+                            offset: const Offset(0, -5),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Transform.translate(
+                                  offset: const Offset(0, 2),
+                                  child: SizedBox(
+                                    width: 22 * scale,
+                                    height: 22 * scale,
+                                    child: Image.asset(
+                                      'assets/images/shop/coin_icon.png',
+                                      fit: BoxFit.contain,
+                                    ),
+                                  ),
+                                ),
+                                SizedBox(width: 6 * scale),
+                                _buildOutlinedValue(
+                                  _formatAmount(_bet),
+                                  size: (_bet > 999999 ? 19 : 20) * scale,
+                                  letterSpacing: -0.04 * (_bet > 999999 ? 19 : 20) * scale,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          Positioned(
+            top: 7 * scale,
+            left: (161 - 132) / 2 * scale,
+            child: PressableButton(
+              onTap: _setMaxBet,
+              child: SizedBox(
+                width: 132 * scale,
+                height: 29 * scale,
+                child: Image.asset(
+                  'assets/images/gold_vein/maxbet_btn.png',
+                  fit: BoxFit.fill,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildBottomBlock(double scale) {
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: 18 * scale),
@@ -1006,128 +1140,10 @@ class _MinersWheelOfFortuneScreenState extends State<MinersWheelOfFortuneScreen>
         mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          SizedBox(
-            width: 161 * scale,
-            height: 96 * scale,
-            child: Stack(
-              clipBehavior: Clip.none,
-              children: [
-                Positioned(
-                  top: 30 * scale,
-                  left: 0,
-                  right: 0,
-                  child: Container(
-                    width: 161 * scale,
-                    height: 57 * scale,
-                    decoration: BoxDecoration(
-                      color: const Color(0x66371810),
-                      borderRadius: BorderRadius.circular(20 * scale),
-                      border: Border.all(
-                        color: const Color(0xFFFFEA4C),
-                        width: 2 * scale,
-                      ),
-                    ),
-                    child: Stack(
-                      clipBehavior: Clip.none,
-                      alignment: Alignment.center,
-                      children: [
-                        Positioned(
-                          left: -12 * scale,
-                          child: PressableButton(
-                            onTap: () => _applyBetDelta(-_betStep),
-                            onLongPressStart: (_) =>
-                                _startContinuousBetAdjust(-1),
-                            onLongPressEnd: (_) => _stopContinuousBetAdjust(),
-                            onLongPressCancel: _stopContinuousBetAdjust,
-                            child: SizedBox(
-                              width: 29 * scale,
-                              height: 52 * scale,
-                              child: Image.asset(
-                                'assets/images/gold_vein/minus_btn.png',
-                                fit: BoxFit.fill,
-                              ),
-                            ),
-                          ),
-                        ),
-                        Positioned(
-                          right: -12 * scale,
-                          child: PressableButton(
-                            onTap: () => _applyBetDelta(_betStep),
-                            onLongPressStart: (_) =>
-                                _startContinuousBetAdjust(1),
-                            onLongPressEnd: (_) => _stopContinuousBetAdjust(),
-                            onLongPressCancel: _stopContinuousBetAdjust,
-                            child: SizedBox(
-                              width: 29 * scale,
-                              height: 52 * scale,
-                              child: Image.asset(
-                                'assets/images/gold_vein/plus_btn.png',
-                                fit: BoxFit.fill,
-                              ),
-                            ),
-                          ),
-                        ),
-                        Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(
-                              'YOUR BET:',
-                              style: GoogleFonts.montserrat(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w900,
-                                fontSize: 10.5 * scale,
-                              ),
-                            ),
-                            SizedBox(height: 2 * scale),
-                            Transform.translate(
-                              offset: Offset(0, -6 * scale),
-                              child: Center(
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    SizedBox(
-                                      width: 24 * scale,
-                                      height: 24 * scale,
-                                      child: Image.asset(
-                                        'assets/images/shop/coin_icon.png',
-                                        fit: BoxFit.contain,
-                                      ),
-                                    ),
-                                    SizedBox(width: 6 * scale),
-                                    _buildOutlinedValue(
-                                      _formatAmount(_bet),
-                                      size: 19 * scale,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                Positioned(
-                  top: 7 * scale,
-                  left: (161 - 132) / 2 * scale,
-                  child: PressableButton(
-                    onTap: _setMaxBet,
-                    child: SizedBox(
-                      width: 132 * scale,
-                      height: 29 * scale,
-                      child: Image.asset(
-                        'assets/images/gold_vein/maxbet_btn.png',
-                        fit: BoxFit.fill,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
+          _buildBetControl(scale),
           SizedBox(width: 44 * scale),
           Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
               Transform.translate(
                 offset: Offset(0, 5 * scale),
@@ -1186,9 +1202,10 @@ class _MinersWheelOfFortuneScreenState extends State<MinersWheelOfFortuneScreen>
     return Scaffold(
       body: LayoutBuilder(
         builder: (context, constraints) {
-          final scale = (constraints.maxWidth / 390)
-              .clamp(0.82, 1.3)
-              .toDouble();
+          final scale = math.min(
+            constraints.maxWidth / 390,
+            constraints.maxHeight / 844,
+          ).clamp(0.82, 1.3).toDouble();
           return Stack(
             fit: StackFit.expand,
             children: [
@@ -1209,7 +1226,10 @@ class _MinersWheelOfFortuneScreenState extends State<MinersWheelOfFortuneScreen>
                       SizedBox(height: 8 * scale),
                       _buildTopBar(scale),
                       SizedBox(height: 8 * scale),
-                      _buildYouWinBanner(scale),
+                      Transform.translate(
+                        offset: const Offset(0, 0),
+                        child: _buildYouWinBanner(scale),
+                      ),
                       SizedBox(height: 4 * scale),
                       _buildWheelOfFortune(scale),
                       SizedBox(height: 4 * scale),
@@ -1222,9 +1242,7 @@ class _MinersWheelOfFortuneScreenState extends State<MinersWheelOfFortuneScreen>
               ),
               if (_isWinOverlayVisible)
                 Positioned.fill(
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: _dismissWinOverlay,
+                  child: IgnorePointer(
                     child: FadeTransition(
                       opacity: CurvedAnimation(
                         parent: _notificationController,
@@ -1240,7 +1258,7 @@ class _MinersWheelOfFortuneScreenState extends State<MinersWheelOfFortuneScreen>
                     child: IgnorePointer(
                       child: Center(
                         child: Transform.translate(
-                          offset: Offset(0, -20 * scale),
+                          offset: Offset(0, -20 * scale + 1),
                           child: _buildJackpotOverlay(scale),
                         ),
                       ),

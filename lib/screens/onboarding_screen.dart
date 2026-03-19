@@ -33,9 +33,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   double _loadingProgress = 0;
   bool _termsAccepted = false;
   bool _loadingComplete = false;
+  bool _warningDismissed = false;
 
   bool get _canPlay =>
       _loadingComplete && _termsAccepted;
+
+  bool get _showAgeWarning =>
+      _loadingComplete && !_termsAccepted && !_warningDismissed;
 
   @override
   void initState() {
@@ -101,7 +105,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       ..sort();
 
     final totalTasks =
-        rasterAssets.length + svgAssets.length + soundAssets.length + 1;
+        rasterAssets.length + svgAssets.length + soundAssets.length + 2;
     var completedTasks = 0;
 
     void updateProgress() {
@@ -146,6 +150,17 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     await AudioService.instance.preloadAssets();
     completedTasks++;
     updateProgress();
+
+    await GoogleFonts.pendingFonts(<TextStyle>[
+      GoogleFonts.montserrat(fontWeight: FontWeight.w400),
+      GoogleFonts.montserrat(fontWeight: FontWeight.w700),
+      GoogleFonts.montserrat(fontWeight: FontWeight.w900),
+      GoogleFonts.gothicA1(fontWeight: FontWeight.w400),
+      GoogleFonts.gothicA1(fontWeight: FontWeight.w700),
+      GoogleFonts.gothicA1(fontWeight: FontWeight.w900),
+    ]);
+    completedTasks++;
+    updateProgress();
   }
 
   Future<void> _onLetsPlay() async {
@@ -172,9 +187,17 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   Future<void> _onTermsTap() async {
     HapticFeedback.selectionClick();
     final newValue = !_termsAccepted;
-    setState(() => _termsAccepted = newValue);
+    setState(() {
+      _termsAccepted = newValue;
+      if (!newValue) _warningDismissed = false;
+    });
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('terms_accepted', newValue);
+  }
+
+  void _onAgeWarningDismiss() {
+    HapticFeedback.lightImpact();
+    setState(() => _warningDismissed = true);
   }
 
   @override
@@ -204,7 +227,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               ),
             ),
           ),
-          if (_loadingComplete && !_termsAccepted)
+          if (_showAgeWarning)
             Positioned(
               top: 0,
               left: 0,
@@ -217,10 +240,17 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 ),
                 child: Material(
                   color: Colors.transparent,
-                  child: const WarningPanel(
-                    message:
-                        'Please confirm that you are at least 18 years old and agree to the Terms of Use and Privacy Policy.',
-                    backgroundColor: Color(0xCC4E2F1C),
+                  child: Dismissible(
+                    key: const ValueKey('age_warning'),
+                    direction: DismissDirection.up,
+                    onDismissed: (_) => _onAgeWarningDismiss(),
+                    child: WarningPanel(
+                      message:
+                          'Please confirm that you are at least 18 years old and agree to the Terms of Use and Privacy Policy.',
+                      backgroundColor: const Color(0xCC4E2F1C),
+                      showCloseButton: true,
+                      onClose: _onAgeWarningDismiss,
+                    ),
                   ),
                 ),
               ),
@@ -326,12 +356,15 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     ]
                   : null,
             ),
-            child: Text(
-              "Let's play",
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 20,
-                fontWeight: FontWeight.w600,
+            child: Center(
+              child: Text(
+                "Let's play",
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
           ),
@@ -411,57 +444,26 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         children: [
           PressableButton(
             onTap: _onTermsTap,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                _buildCheckbox(),
-                const SizedBox(width: 8),
-                PressableButton(
-                  onTap: () {
-                    HapticFeedback.selectionClick();
-                    // TODO: open Terms of Use
-                  },
-                  child: Text(
-                    'TERMS OF USE',
-                    textAlign: TextAlign.center,
-                    style: GoogleFonts.gothicA1(
-                      color: Colors.white.withValues(alpha: 0.9),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      height: 1.6,
-                      letterSpacing: 0,
-                    ),
-                  ),
-                ),
-                Text(
-                  '  |  ',
+            child: Transform.translate(
+              offset: const Offset(0, 2),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  _buildCheckbox(),
+                  const SizedBox(width: 8),
+                  Text(
+                  'TERMS OF USE | PRIVACY POLICY',
                   textAlign: TextAlign.center,
                   style: GoogleFonts.gothicA1(
-                    color: Colors.white.withValues(alpha: 0.6),
+                    color: Colors.white.withValues(alpha: 0.9),
                     fontSize: 12,
                     fontWeight: FontWeight.w700,
                     height: 1.6,
                     letterSpacing: 0,
                   ),
                 ),
-                PressableButton(
-                  onTap: () {
-                    HapticFeedback.selectionClick();
-                    // TODO: open Privacy Policy
-                  },
-                  child: Text(
-                    'PRIVACY POLICY',
-                    textAlign: TextAlign.center,
-                    style: GoogleFonts.gothicA1(
-                      color: Colors.white.withValues(alpha: 0.9),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      height: 1.6,
-                      letterSpacing: 0,
-                    ),
-                  ),
-                ),
               ],
+            ),
             ),
           ),
           const SizedBox(height: 8),

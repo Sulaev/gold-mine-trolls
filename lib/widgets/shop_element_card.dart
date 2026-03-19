@@ -10,6 +10,7 @@ class ShopElementCard extends StatelessWidget {
     this.price = '\$0.00',
     this.contentTopOffset = 0.0,
     this.showOnlyForYouBanner = false,
+    this.scale = 0.917,
     this.onBuyTap,
   });
 
@@ -17,16 +18,10 @@ class ShopElementCard extends StatelessWidget {
   final String price;
   final double contentTopOffset;
   final bool showOnlyForYouBanner;
+  final double scale;
   final VoidCallback? onBuyTap;
 
-  static const _scale = 0.917; // 0.873 * 1.05 — увеличено на 5% вместе с shop_screen
-  static double get _elementWidth => 261 * _scale;
-  static double get _onlyForYouBannerWidth => 117 * _scale;
-  static double get _onlyForYouBannerHeight => 22 * _scale;
-  static double get _elementHeight => 126 * _scale;
-  static double get _coinSize => 28 * _scale;
-  static double get _priceWidth => 99 * _scale;
-  static double get _priceHeight => 34 * _scale;
+  double get _s => scale;
 
   static const _amountColor = Color(0xFFFCDE66);
   static const _priceColor = Color(0xFFFFFFFF);
@@ -48,8 +43,8 @@ class ShopElementCard extends StatelessWidget {
     return PressableButton(
       onTap: onBuyTap,
       child: SizedBox(
-        width: _elementWidth,
-        height: _elementHeight,
+        width: 261 * _s,
+        height: 126 * _s,
         child: Stack(
           fit: StackFit.expand,
           clipBehavior: Clip.none,
@@ -63,7 +58,7 @@ class ShopElementCard extends StatelessWidget {
               ),
             ),
             Positioned(
-              top: 34 + contentTopOffset, // 29+5 px вниз для иконки и количества
+              top: (34 + contentTopOffset) * _s,
               left: 0,
               right: 0,
               child: Column(
@@ -74,20 +69,23 @@ class ShopElementCard extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      SizedBox(
-                        width: _coinSize,
-                        height: _coinSize,
-                        child: Image.asset(
-                          'assets/images/main_screen/coin_icon.png',
-                          fit: BoxFit.contain,
-                          errorBuilder: (context, error, stackTrace) => Icon(
-                            Icons.monetization_on,
-                            size: _coinSize,
-                            color: _amountColor,
+                      Transform.translate(
+                        offset: const Offset(0, 2),
+                        child: SizedBox(
+                          width: 28 * _s,
+                          height: 28 * _s,
+                          child: Image.asset(
+                            'assets/images/main_screen/coin_icon.png',
+                            fit: BoxFit.contain,
+                            errorBuilder: (context, error, stackTrace) => Icon(
+                              Icons.monetization_on,
+                              size: 28 * _s,
+                              color: _amountColor,
+                            ),
                           ),
                         ),
                       ),
-                      SizedBox(width: 8 * _scale),
+                      SizedBox(width: 8 * _s),
                       _buildAmountText(amountText),
                     ],
                   ),
@@ -100,22 +98,23 @@ class ShopElementCard extends StatelessWidget {
             ),
           if (showOnlyForYouBanner)
             Positioned(
-              top: 18 * _scale,
-              left: (_elementWidth - _onlyForYouBannerWidth) / 2,
+              top: 18 * _s,
+              left: (261 * _s - 117 * _s) / 2,
               child: Image.asset(
                 'assets/images/shop/banner_only_for_you.png',
-                width: _onlyForYouBannerWidth,
-                height: _onlyForYouBannerHeight,
+                width: 117 * _s,
+                height: 22 * _s,
                 fit: BoxFit.contain,
                 errorBuilder: (context, error, stackTrace) => SizedBox(
-                  width: _onlyForYouBannerWidth,
-                  height: _onlyForYouBannerHeight,
-                  child: const Center(
-                    child: Text(
-                      'ONLY FOR YOU',
-                      style: TextStyle(
+                  width: 117 * _s,
+                  height: 22 * _s,
+                    child: Center(
+                      child: Text(
+                        'ONLY FOR YOU',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
                         color: Colors.amber,
-                        fontSize: 10 * _scale,
+                        fontSize: 10 * _s,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
@@ -129,10 +128,10 @@ class ShopElementCard extends StatelessWidget {
     );
   }
 
-  static TextStyle _amountTextStyle({Color? color, Paint? foreground}) {
+  TextStyle _amountTextStyle({Color? color, Paint? foreground}) {
     return GoogleFonts.montserrat(
       fontWeight: FontWeight.w900,
-      fontSize: 23.24 * _scale,
+      fontSize: 23.24 * _s,
       height: 1.6,
       letterSpacing: -0.02,
       color: foreground != null ? null : color,
@@ -149,7 +148,7 @@ class ShopElementCard extends StatelessWidget {
 
   Widget _buildAmountText(String text) {
     return Padding(
-            padding: EdgeInsets.symmetric(horizontal: 8 * _scale, vertical: 4 * _scale),
+            padding: EdgeInsets.symmetric(horizontal: 8 * _s, vertical: 4 * _s),
       child: Stack(
         children: [
           Text(
@@ -174,25 +173,25 @@ class ShopElementCard extends StatelessWidget {
         children: [
           Image.asset(
             'assets/images/shop/price_bg.png',
-            width: _priceWidth,
-            height: _priceHeight,
+            width: 99 * _s,
+            height: 34 * _s,
             fit: BoxFit.contain,
             errorBuilder: (context, error, stackTrace) =>
                 Container(
-                  width: _priceWidth,
-                  height: _priceHeight,
+                  width: 99 * _s,
+                  height: 34 * _s,
                   color: Colors.brown.shade800,
                 ),
           ),
           Padding(
-            padding: EdgeInsets.symmetric(horizontal: 10 * _scale, vertical: 4 * _scale),
+            padding: EdgeInsets.symmetric(horizontal: 10 * _s, vertical: 4 * _s),
             child: Stack(
               children: [
                 Text(
                   price,
                     style: GoogleFonts.montserrat(
                     fontWeight: FontWeight.w900,
-                    fontSize: 19.11 * _scale,
+                    fontSize: 19.11 * _s,
                     height: 1.6,
                     letterSpacing: -0.02,
                     foreground: Paint()
@@ -212,7 +211,7 @@ class ShopElementCard extends StatelessWidget {
                   price,
                     style: GoogleFonts.montserrat(
                     fontWeight: FontWeight.w900,
-                    fontSize: 19.11 * _scale,
+                    fontSize: 19.11 * _s,
                     height: 1.6,
                     letterSpacing: -0.02,
                     color: _priceColor,

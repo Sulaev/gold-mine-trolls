@@ -292,12 +292,15 @@ class _WelcomeBonusScreenState extends State<WelcomeBonusScreen>
                 color: const Color(0xFFFFB347),
                 borderRadius: BorderRadius.circular(_buttonHeight / 2),
               ),
-              child: const Text(
-                'GET FREE GOLD',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
+              child: const Center(
+                child: Text(
+                  'GET FREE GOLD',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
             ),

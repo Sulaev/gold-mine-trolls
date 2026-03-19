@@ -29,16 +29,16 @@ class GoldVeinInfoContent extends StatelessWidget {
   static const _multipliers = [
     'X10',
     'X1.3',
-    'X0.4',
-    'X0.7',
-    'X0.2',
+    'X1.4',
+    'X1.6',
+    'X1.1',
     'X2.6',
     'X6.5',
     'X3.5',
     'X8.2',
     'X1.8',
     'X4.8',
-    'X0.9',
+    'X2.3',
   ];
 
   static const _iconsTopOffset = 80.0;

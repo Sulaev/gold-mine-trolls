@@ -172,14 +172,17 @@ class _TapBannerState extends State<TapBanner>
                     child: Image.asset(
                       TapBanner._tapAsset,
                       fit: BoxFit.contain,
-                      errorBuilder: (context, error, stackTrace) => Text(
-                        'TAP',
-                        style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.9),
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
+                        errorBuilder: (context, error, stackTrace) => Center(
+                          child: Text(
+                            'TAP',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.9),
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                         ),
-                      ),
                     ),
                   ),
                 ],

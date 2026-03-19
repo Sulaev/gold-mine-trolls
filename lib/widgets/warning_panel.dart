@@ -8,11 +8,17 @@ class WarningPanel extends StatelessWidget {
     required this.message,
     this.backgroundColor = const Color(0xCC4E2F1C),
     this.textColor = Colors.white,
+    this.showCloseButton = true,
+    this.onClose,
   });
 
   final String message;
   final Color backgroundColor;
   final Color textColor;
+  /// 18+ onboarding: false — нельзя закрыть по кнопке X
+  final bool showCloseButton;
+  /// Вызывается при нажатии на крестик (если showCloseButton == true)
+  final VoidCallback? onClose;
 
   @override
   Widget build(BuildContext context) {
@@ -46,12 +52,21 @@ class WarningPanel extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(width: 10),
-          Icon(
-            Icons.close_rounded,
-            color: textColor.withValues(alpha: 0.9),
-            size: 22,
-          ),
+          if (showCloseButton) ...[
+            const SizedBox(width: 10),
+            GestureDetector(
+              onTap: onClose,
+              behavior: HitTestBehavior.opaque,
+              child: Padding(
+                padding: const EdgeInsets.all(4),
+                child: Icon(
+                  Icons.close_rounded,
+                  color: textColor.withValues(alpha: 0.9),
+                  size: 22,
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );

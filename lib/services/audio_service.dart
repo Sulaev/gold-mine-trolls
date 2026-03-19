@@ -16,7 +16,7 @@ class AudioService {
   static const _clickAsset = 'assets/sounds/common/button_click.wav';
   static const _rouletteSpinAsset = 'assets/sounds/gold_vein/roulette_spin.wav';
   static const _wheelSpinAsset =
-      'assets/sounds/miners_wheel_of_fortune/gumball_machine.ogg';
+      'assets/sounds/miners_wheel_of_fortune/gumball-machine.wav';
   static const _drillingAsset = 'assets/sounds/mine_depth_tower/drilling.wav';
   static const _mineDepthTowerRoomDownAsset =
       'assets/sounds/mine_depth_tower/room_down.wav';
@@ -25,6 +25,10 @@ class AudioService {
   static const _cardDropAsset = 'assets/sounds/card_mine_21/card_drop.wav';
   static const _goldenAvalancheCoinAsset =
       'assets/sounds/golden_avalanche/coin.wav';
+  static const _goldenAvalanchePegClickAsset =
+      'assets/sounds/golden_avalanche/click.wav';
+  /// Few preloaded players (not 10× ExoPlayer); round-robin for overlap.
+  static const _goldenAvalanchePegPlayerCount = 5;
   static const _treasureTrailLadderClaimAsset =
       'assets/sounds/treasure_trail_ladder/claim.wav';
   static const _chiefTrollsWheelSpinAsset =
@@ -45,9 +49,17 @@ class AudioService {
   final AudioPlayer _losePlayer = AudioPlayer();
   final AudioPlayer _winPlayer = AudioPlayer();
   final AudioPlayer _goldenAvalancheCoinPlayer = AudioPlayer();
+  final List<AudioPlayer> _gaPegPlayers = List.generate(
+    _goldenAvalanchePegPlayerCount,
+    (_) => AudioPlayer(),
+  );
+  int _gaPegRoundRobin = 0;
+  bool _gaPegPreloaded = false;
+  Future<void>? _gaPegPreloadFuture;
   final AudioPlayer _treasureTrailLadderClaimPlayer = AudioPlayer();
   final AudioPlayer _cautiousMinerBoomPlayer = AudioPlayer();
   final AudioPlayer _minersWheelSpinPlayer = AudioPlayer();
+  final AudioPlayer _rouletteSpinPlayer = AudioPlayer();
 
   StreamSubscription<Duration>? _bgPositionSub;
   StreamSubscription<PlayerState>? _bgStateSub;
@@ -64,7 +76,9 @@ class AudioService {
   bool _loseLoaded = false;
   bool _winLoaded = false;
   bool _minersWheelSpinLoaded = false;
+  bool _rouletteSpinLoaded = false;
   double _bgVolumeBeforeDuck = 1.0;
+  Timer? _rouletteSpinFadeTimer;
 
   Future<void> preloadAssets() async {
     try {
@@ -76,6 +90,8 @@ class AudioService {
           androidAudioFocusGainType: AndroidAudioFocusGainType.gain,
         ),
       );
+
+      await _preloadGoldenAvalanchePegClicks();
 
       if (!_bgInitialized) {
         await _bgPlayer.setAsset(_bgAsset);
@@ -129,9 +145,12 @@ class AudioService {
         await _minersWheelSpinPlayer.setAsset(_wheelSpinAsset);
         _minersWheelSpinLoaded = true;
       }
+      if (!_rouletteSpinLoaded) {
+        await _rouletteSpinPlayer.setAsset(_rouletteSpinAsset);
+        _rouletteSpinLoaded = true;
+      }
 
       // Warm bundle cache for shared SFX assets that reuse one player instance.
-      await rootBundle.load(_rouletteSpinAsset);
       await rootBundle.load(_chiefTrollsWheelSpinAsset);
     } catch (_) {}
   }
@@ -216,6 +235,8 @@ class AudioService {
   Future<void> setSoundEnabled(bool enabled) async {
     if (enabled) return;
     try {
+      _rouletteSpinFadeTimer?.cancel();
+      _rouletteSpinFadeTimer = null;
       await _clickPlayer.stop();
       await _sfxPlayer.stop();
       await _drillingPlayer.stop();
@@ -227,6 +248,7 @@ class AudioService {
       await _treasureTrailLadderClaimPlayer.stop();
       await _cautiousMinerBoomPlayer.stop();
       await _minersWheelSpinPlayer.stop();
+      await _rouletteSpinPlayer.stop();
     } catch (_) {}
   }
 
@@ -286,25 +308,36 @@ class AudioService {
 
   /// Play wheel spin (gumball_machine) and fade out over [durationMs].
   /// Call when miners wheel spin starts.
+  /// Uses Timer.periodic for fade to avoid blocking UI on weak devices.
+  /// Starts playback immediately without awaiting setup for instant response.
   Future<void> playWheelSpin(int durationMs) async {
     if (!SettingsService.soundEnabled) return;
     try {
-      await ensureMinersWheelSpinLoaded();
-      await _minersWheelSpinPlayer.stop();
-      await _minersWheelSpinPlayer.setVolume(1.0);
-      await _minersWheelSpinPlayer.seek(Duration.zero);
-      await _minersWheelSpinPlayer.play();
-
-      final steps = 20;
-      final stepMs = durationMs ~/ steps;
-      for (var i = 1; i <= steps; i++) {
-        await Future<void>.delayed(Duration(milliseconds: stepMs));
-        final t = i / steps;
-        final vol = (1.0 - t).clamp(0.0, 1.0);
-        await _minersWheelSpinPlayer.setVolume(vol);
+      if (!_minersWheelSpinLoaded) {
+        await ensureMinersWheelSpinLoaded();
       }
-      await _minersWheelSpinPlayer.stop();
-      unawaited(_ensureBgSpeedCorrect());
+      unawaited(() async {
+        await _minersWheelSpinPlayer.stop();
+        await _minersWheelSpinPlayer.setVolume(1.0);
+        await _minersWheelSpinPlayer.seek(Duration.zero);
+        await _minersWheelSpinPlayer.play();
+      }());
+
+      final steps = 8;
+      final stepMs = durationMs ~/ steps;
+      var step = 0;
+      Timer.periodic(Duration(milliseconds: stepMs), (t) {
+        step++;
+        if (step >= steps) {
+          t.cancel();
+          unawaited(_minersWheelSpinPlayer.stop());
+          unawaited(_minersWheelSpinPlayer.seek(Duration.zero));
+          unawaited(_ensureBgSpeedCorrect());
+          return;
+        }
+        final vol = (1.0 - step / steps).clamp(0.0, 1.0);
+        unawaited(_minersWheelSpinPlayer.setVolume(vol));
+      });
     } catch (_) {}
   }
 
@@ -326,20 +359,81 @@ class AudioService {
     } catch (_) {}
   }
 
-  /// Play coin sound when ball lands in chest in Golden Avalanche.
-  Future<void> playGoldenAvalancheCoin() async {
+  void playGoldenAvalancheCoin() {
     if (!SettingsService.soundEnabled) return;
+    unawaited(_playGoldenAvalancheCoinAsync());
+  }
+
+  Future<void> _playGoldenAvalancheCoinAsync() async {
     try {
+      final p = _goldenAvalancheCoinPlayer;
       if (!_goldenAvalancheCoinLoaded) {
-        await _goldenAvalancheCoinPlayer.setAsset(_goldenAvalancheCoinAsset);
+        await p.setAsset(_goldenAvalancheCoinAsset);
         _goldenAvalancheCoinLoaded = true;
       }
-      await _goldenAvalancheCoinPlayer.stop();
-      await _goldenAvalancheCoinPlayer.setVolume(1.0);
-      await _goldenAvalancheCoinPlayer.seek(Duration.zero);
-      await _goldenAvalancheCoinPlayer.play();
+      await p.stop();
+      await p.setVolume(1.0);
+      await p.seek(Duration.zero);
+      await p.play();
       unawaited(_ensureBgSpeedCorrect());
     } catch (_) {}
+  }
+
+  Future<void> _preloadGoldenAvalanchePegClicks() async {
+    if (_gaPegPreloaded) return;
+    _gaPegPreloadFuture ??= _doPreloadGoldenAvalanchePegClicks();
+    try {
+      await _gaPegPreloadFuture!;
+    } finally {
+      if (!_gaPegPreloaded) {
+        _gaPegPreloadFuture = null;
+      }
+    }
+  }
+
+  Future<void> _doPreloadGoldenAvalanchePegClicks() async {
+    try {
+      for (final p in _gaPegPlayers) {
+        await p.setAsset(_goldenAvalanchePegClickAsset);
+        await p.setVolume(0.55);
+      }
+      _gaPegPreloaded = true;
+    } catch (_) {
+      _gaPegPreloaded = false;
+    }
+  }
+
+  /// Ensures peg SFX buffers are ready (e.g. when opening Golden Avalanche).
+  Future<void> warmUpGoldenAvalanchePegClicks() =>
+      _preloadGoldenAvalanchePegClicks();
+
+  void _playPegOnPlayer(AudioPlayer p) {
+    unawaited(() async {
+      try {
+        await p.seek(Duration.zero);
+        await p.play();
+      } catch (_) {}
+    }());
+  }
+
+  /// Ball hits peg — uses preloaded round-robin players (no soundpool / old embedding).
+  void playGoldenAvalanchePegClick() {
+    if (!SettingsService.soundEnabled) return;
+    if (!_gaPegPreloaded) {
+      unawaited(_pegClickAfterPreload());
+      return;
+    }
+    final i = _gaPegRoundRobin % _gaPegPlayers.length;
+    _gaPegRoundRobin++;
+    _playPegOnPlayer(_gaPegPlayers[i]);
+  }
+
+  Future<void> _pegClickAfterPreload() async {
+    await _preloadGoldenAvalanchePegClicks();
+    if (!SettingsService.soundEnabled || !_gaPegPreloaded) return;
+    final i = _gaPegRoundRobin % _gaPegPlayers.length;
+    _gaPegRoundRobin++;
+    _playPegOnPlayer(_gaPegPlayers[i]);
   }
 
   /// Play claim sound when correct card chosen in Treasure Trail Ladder.
@@ -460,31 +554,58 @@ class AudioService {
     }
   }
 
-  /// Play roulette spin and fade out over [durationMs]. Call when spin starts.
+  /// Ensure roulette spin asset is loaded. Call before playRouletteSpin if needed.
+  Future<void> ensureRouletteSpinLoaded() async {
+    if (_rouletteSpinLoaded) return;
+    try {
+      await _rouletteSpinPlayer.setAsset(_rouletteSpinAsset);
+      _rouletteSpinLoaded = true;
+    } catch (_) {}
+  }
+
+  /// Play roulette spin (Gold Vein slots) from the start every time, then fade out.
+  /// Cancels any previous fade timer so rapid / auto spins always hear a fresh start.
   Future<void> playRouletteSpin(int durationMs) async {
     if (!SettingsService.soundEnabled) return;
     try {
-      await _sfxPlayer.stop();
-      await _sfxPlayer.setAsset(_rouletteSpinAsset);
-      await _sfxPlayer.setVolume(1.0);
-      await _sfxPlayer.seek(Duration.zero);
-      await _sfxPlayer.play();
+      _rouletteSpinFadeTimer?.cancel();
+      _rouletteSpinFadeTimer = null;
 
-      final steps = 20;
-      final stepMs = durationMs ~/ steps;
-      for (var i = 1; i <= steps; i++) {
-        await Future<void>.delayed(Duration(milliseconds: stepMs));
-        final t = i / steps;
-        final vol = (1.0 - t).clamp(0.0, 1.0);
-        await _sfxPlayer.setVolume(vol);
+      if (!_rouletteSpinLoaded) {
+        await ensureRouletteSpinLoaded();
       }
-      await _sfxPlayer.stop();
-      unawaited(_ensureBgSpeedCorrect());
+
+      await _rouletteSpinPlayer.stop();
+      await _rouletteSpinPlayer.setVolume(1.0);
+      await _rouletteSpinPlayer.seek(Duration.zero);
+      await _rouletteSpinPlayer.play();
+
+      final steps = 8;
+      final stepMs = (durationMs ~/ steps).clamp(40, 2000);
+      var step = 0;
+      _rouletteSpinFadeTimer = Timer.periodic(
+        Duration(milliseconds: stepMs),
+        (t) {
+          step++;
+          if (step >= steps) {
+            t.cancel();
+            _rouletteSpinFadeTimer = null;
+            unawaited(_rouletteSpinPlayer.stop());
+            unawaited(_rouletteSpinPlayer.seek(Duration.zero));
+            unawaited(_ensureBgSpeedCorrect());
+            return;
+          }
+          final vol = (1.0 - step / steps).clamp(0.0, 1.0);
+          unawaited(_rouletteSpinPlayer.setVolume(vol));
+        },
+      );
     } catch (_) {}
   }
 
   /// Dispose players. Call on app exit if needed.
   Future<void> dispose() async {
+    _rouletteSpinFadeTimer?.cancel();
+    _rouletteSpinFadeTimer = null;
     _bgPositionSub?.cancel();
     _bgStateSub?.cancel();
     _bgSpeedGuardTimer?.cancel();
@@ -498,8 +619,12 @@ class AudioService {
     await _losePlayer.dispose();
     await _winPlayer.dispose();
     await _goldenAvalancheCoinPlayer.dispose();
+    for (final p in _gaPegPlayers) {
+      await p.dispose();
+    }
     await _treasureTrailLadderClaimPlayer.dispose();
     await _cautiousMinerBoomPlayer.dispose();
     await _minersWheelSpinPlayer.dispose();
+    await _rouletteSpinPlayer.dispose();
   }
 }

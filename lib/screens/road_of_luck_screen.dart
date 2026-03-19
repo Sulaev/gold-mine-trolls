@@ -1,7 +1,6 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:gold_mine_trolls/services/analytics_service.dart';
 import 'package:gold_mine_trolls/services/balance_service.dart';
@@ -39,6 +38,8 @@ class _RoadOfLuckScreenState extends State<RoadOfLuckScreen> {
   static const _coinSize = 21.0;
   static const _priceBgWidth = 130.0;
   static const _priceBgHeight = 34.0;
+  static const _designWidth = 390.0;
+  static const _designHeight = 844.0;
   static const _amountFontSize = 15.0;
   static const _amountColor = Color(0xFFFFFFFF);
   static const _borderColor = Color(0x40000000);
@@ -123,6 +124,7 @@ class _RoadOfLuckScreenState extends State<RoadOfLuckScreen> {
             onPressed: () => Navigator.of(ctx).pop(false),
             child: Text(
               'Cancel',
+              textAlign: TextAlign.center,
               style: GoogleFonts.montserrat(color: Colors.white70),
             ),
           ),
@@ -130,6 +132,7 @@ class _RoadOfLuckScreenState extends State<RoadOfLuckScreen> {
             onPressed: () => Navigator.of(ctx).pop(true),
             child: Text(
               'Buy',
+              textAlign: TextAlign.center,
               style: GoogleFonts.montserrat(
                 color: _activeTextColor,
                 fontWeight: FontWeight.w900,
@@ -186,27 +189,33 @@ class _RoadOfLuckScreenState extends State<RoadOfLuckScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Stack(
-        fit: StackFit.expand,
-        children: [
-          Image.asset(
-            'assets/images/road_of_luck/bg.png',
-            fit: BoxFit.cover,
-            errorBuilder: (context, error, stackTrace) => Container(
-              color: const Color(0xFF1A1510),
-            ),
-          ),
-          Positioned(
-            top: _titleTop,
-            left: 0,
-            right: 0,
-            child: Stack(
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final scale = math.min(
+            constraints.maxWidth / _designWidth,
+            constraints.maxHeight / _designHeight,
+          ).clamp(0.82, 1.3);
+          return Stack(
+            fit: StackFit.expand,
+            children: [
+              Image.asset(
+                'assets/images/road_of_luck/bg.png',
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) => Container(
+                  color: const Color(0xFF1A1510),
+                ),
+              ),
+              Positioned(
+                top: _titleTop * scale,
+                left: 0,
+                right: 0,
+                child: Stack(
               alignment: Alignment.center,
               children: [
                 Center(
                   child: SizedBox(
-                    width: _titleWidth,
-                    height: _titleHeight,
+                    width: _titleWidth * scale,
+                    height: _titleHeight * scale,
                     child: Image.asset(
                       'assets/images/road_of_luck/title.png',
                       fit: BoxFit.contain,
@@ -223,15 +232,15 @@ class _RoadOfLuckScreenState extends State<RoadOfLuckScreen> {
                 ),
                 Positioned(
                   top: 0,
-                  right: _closeBtnRightMargin,
+                  right: _closeBtnRightMargin * scale,
                   child: PressableButton(
                     onTap: () {
                       SettingsService.hapticLightImpact();
                       Navigator.of(context).pop();
                     },
                     child: SizedBox(
-                      width: _closeBtnSize,
-                      height: _closeBtnSize,
+                      width: _closeBtnSize * scale,
+                      height: _closeBtnSize * scale,
                       child: Image.asset(
                         'assets/images/shop/btn_close.png',
                         fit: BoxFit.contain,
@@ -249,8 +258,8 @@ class _RoadOfLuckScreenState extends State<RoadOfLuckScreen> {
               ],
             ),
           ),
-          Positioned(
-            top: _elementsTop,
+              Positioned(
+            top: _elementsTop * scale,
             left: 0,
             right: 0,
             bottom: 0,
@@ -258,107 +267,109 @@ class _RoadOfLuckScreenState extends State<RoadOfLuckScreen> {
               padding: EdgeInsets.zero,
               child: Center(
                 child: SizedBox(
-                  width: _gridBlockMaxWidth,
+                  width: _gridBlockMaxWidth * scale,
                   child: FittedBox(
                     fit: BoxFit.scaleDown,
                     alignment: Alignment.center,
                     child: Stack(
                       clipBehavior: Clip.none,
                       children: [
-                    Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        _buildGridRow(0, 1),
-                        const SizedBox(height: _gap),
-                        _buildGridRow(2, 3),
-                        const SizedBox(height: _gap),
-                        _buildGridRow(4, 5),
+                        Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            _buildGridRow(0, 1, scale),
+                            SizedBox(height: _gap * scale),
+                            _buildGridRow(2, 3, scale),
+                            SizedBox(height: _gap * scale),
+                            _buildGridRow(4, 5, scale),
+                          ],
+                        ),
+                        Positioned(
+                          left: _bagBgWidth * scale + _gap * scale / 2 - _arrowWidth * scale / 2,
+                          top: _bagBgHeight * scale / 2 - _arrowHeight * scale / 2 + 5 * scale,
+                          child: _buildArrowRight(scale),
+                        ),
+                        Positioned(
+                          left: _bagBgWidth * scale + _gap * scale + _bagBgWidth * scale / 2 - _arrowWidth * scale / 2,
+                          top: _bagBgHeight * scale + _gap * scale / 2 - _arrowHeight * scale / 2,
+                          child: Transform.rotate(
+                            angle: math.pi / 2,
+                            child: _buildArrowRight(scale),
+                          ),
+                        ),
+                        Positioned(
+                          left: _bagBgWidth * scale + _gap * scale / 2 - _arrowWidth * scale / 2,
+                          top: _bagBgHeight * scale + _gap * scale + _bagBgHeight * scale / 2 - _arrowHeight * scale / 2 + 5 * scale,
+                          child: Transform.rotate(
+                            angle: math.pi,
+                            child: _buildArrowRight(scale),
+                          ),
+                        ),
+                        Positioned(
+                          left: _bagBgWidth * scale / 2 - _arrowWidth * scale / 2,
+                          top: 2 * (_bagBgHeight + _gap) * scale + _gap * scale / 2 - _arrowHeight * scale / 2 - 10 * scale,
+                          child: Transform.rotate(
+                            angle: math.pi / 2,
+                            child: _buildArrowRight(scale),
+                          ),
+                        ),
+                        Positioned(
+                          left: _bagBgWidth * scale + _gap * scale / 2 - _arrowWidth * scale / 2,
+                          top: 2 * (_bagBgHeight + _gap) * scale + _bagBgHeight * scale / 2 - _arrowHeight * scale / 2 + 5 * scale,
+                          child: _buildArrowRight(scale),
+                        ),
                       ],
                     ),
-                    Positioned(
-                      left: _bagBgWidth + _gap / 2 - _arrowWidth / 2,
-                      top: _bagBgHeight / 2 - _arrowHeight / 2 + 5,
-                      child: _buildArrowRight(),
-                    ),
-                    Positioned(
-                      left: _bagBgWidth + _gap + _bagBgWidth / 2 - _arrowWidth / 2,
-                      top: _bagBgHeight + _gap / 2 - _arrowHeight / 2,
-                      child: Transform.rotate(
-                        angle: math.pi / 2,
-                        child: _buildArrowRight(),
-                      ),
-                    ),
-                    Positioned(
-                      left: _bagBgWidth + _gap / 2 - _arrowWidth / 2,
-                      top: _bagBgHeight + _gap + _bagBgHeight / 2 - _arrowHeight / 2 + 5,
-                      child: Transform.rotate(
-                        angle: math.pi,
-                        child: _buildArrowRight(),
-                      ),
-                    ),
-                    Positioned(
-                      left: _bagBgWidth / 2 - _arrowWidth / 2,
-                      top: 2 * (_bagBgHeight + _gap) + _gap / 2 - _arrowHeight / 2 - 10,
-                      child: Transform.rotate(
-                        angle: math.pi / 2,
-                        child: _buildArrowRight(),
-                      ),
-                    ),
-                    Positioned(
-                      left: _bagBgWidth + _gap / 2 - _arrowWidth / 2,
-                      top: 2 * (_bagBgHeight + _gap) + _bagBgHeight / 2 - _arrowHeight / 2 + 5,
-                      child: _buildArrowRight(),
-                    ),
-                  ],
+                  ),
                 ),
               ),
             ),
           ),
-          ),
-        ),
-        ],
+            ],
+          );
+        },
       ),
     );
   }
 
-  Widget _buildGridRow(int leftIndex, int rightIndex) {
+  Widget _buildGridRow(int leftIndex, int rightIndex, double scale) {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        _buildBagTile(leftIndex),
-        const SizedBox(width: _gap),
-        _buildBagTile(rightIndex),
+        _buildBagTile(leftIndex, scale),
+        SizedBox(width: _gap * scale),
+        _buildBagTile(rightIndex, scale),
       ],
     );
   }
 
-  Widget _buildArrowRight() {
+  Widget _buildArrowRight(double scale) {
     return SizedBox(
-      width: _arrowWidth,
-      height: _arrowHeight,
+      width: _arrowWidth * scale,
+      height: _arrowHeight * scale,
       child: Image.asset(
         'assets/images/road_of_luck/arrow.png',
         fit: BoxFit.contain,
         errorBuilder: (context, error, stackTrace) => Container(
           color: Colors.amber.withValues(alpha: 0.3),
-          child: Icon(Icons.arrow_forward, size: _arrowHeight),
+          child: Icon(Icons.arrow_forward, size: _arrowHeight * scale),
         ),
       ),
     );
   }
 
-  Widget _buildBagTile(int index) {
+  Widget _buildBagTile(int index, double scale) {
     final amount = _amounts[index];
     final price = _prices[index];
     final isActive = _isActiveStep(index);
     final glowColor = isActive ? _glowOrange : _glowGray;
-    final cardContent = _buildBagBg(amount, price, isActive);
+    final cardContent = _buildBagBg(amount, price, isActive, scale);
     final content = AnimatedContainer(
       duration: const Duration(milliseconds: 180),
-      width: _bagBgWidth,
-      height: _bagBgHeight,
+      width: _bagBgWidth * scale,
+      height: _bagBgHeight * scale,
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: BorderRadius.circular(28 * scale),
         boxShadow: [
           BoxShadow(
             color: glowColor.withValues(alpha: isActive ? 0.8 : 0.28),
@@ -367,8 +378,8 @@ class _RoadOfLuckScreenState extends State<RoadOfLuckScreen> {
           ),
         ],
       ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(26),
+        child: ClipRRect(
+        borderRadius: BorderRadius.circular(26 * scale),
         child: isActive
             ? cardContent
             : Opacity(
@@ -393,11 +404,11 @@ class _RoadOfLuckScreenState extends State<RoadOfLuckScreen> {
     );
   }
 
-  Widget _buildBagBg(int amount, String price, bool isActive) {
+  Widget _buildBagBg(int amount, String price, bool isActive, double scale) {
     final amountText = _formatCoins(amount);
     return SizedBox(
-      width: _bagBgWidth,
-      height: _bagBgHeight,
+      width: _bagBgWidth * scale,
+      height: _bagBgHeight * scale,
       child: Stack(
         fit: StackFit.expand,
         children: [
@@ -410,7 +421,7 @@ class _RoadOfLuckScreenState extends State<RoadOfLuckScreen> {
             ),
           ),
           Positioned(
-            top: 32, // иконка и номинал выше на 3 px
+            top: 32 * scale,
             left: 0,
             right: 0,
             child: Row(
@@ -418,27 +429,30 @@ class _RoadOfLuckScreenState extends State<RoadOfLuckScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                SizedBox(
-                  width: _coinSize,
-                  height: _coinSize,
-                  child: Image.asset(
-                    'assets/images/main_screen/coin_icon.png',
-                    fit: BoxFit.contain,
-                    errorBuilder: (context, error, stackTrace) => Icon(
-                      Icons.monetization_on,
-                      size: _coinSize,
-                      color: _amountColor,
+                Transform.translate(
+                  offset: Offset(0, 2),
+                  child: SizedBox(
+                    width: _coinSize * scale,
+                    height: _coinSize * scale,
+                    child: Image.asset(
+                      'assets/images/main_screen/coin_icon.png',
+                      fit: BoxFit.contain,
+                      errorBuilder: (context, error, stackTrace) => Icon(
+                        Icons.monetization_on,
+                        size: _coinSize,
+                        color: _amountColor,
+                      ),
                     ),
                   ),
                 ),
-                const SizedBox(width: 6),
-                _buildAmountText(amountText, isActive),
+                SizedBox(width: 6 * scale),
+                _buildAmountText(amountText, isActive, scale),
               ],
             ),
           ),
           Center(
             child: Transform.translate(
-              offset: const Offset(0, 15), // +3 px вниз
+              offset: Offset(0, 15 * scale),
               child: Transform.scale(
                 scale: 0.98, // на 2% меньше
                 child: Image.asset(
@@ -456,9 +470,9 @@ class _RoadOfLuckScreenState extends State<RoadOfLuckScreen> {
           Positioned(
             left: 0,
             right: 0,
-            bottom: 20,
+            bottom: 20 * scale,
             child: Center(
-              child: _buildPriceSection(price, isActive),
+              child: _buildPriceSection(price, isActive, scale),
             ),
           ),
         ],
@@ -466,85 +480,92 @@ class _RoadOfLuckScreenState extends State<RoadOfLuckScreen> {
     );
   }
 
-  Widget _buildPriceSection(String price, bool isActive) {
+  Widget _buildPriceSection(String price, bool isActive, double scale) {
     final textColor = isActive ? _activeTextColor : _inactiveTextColor;
-    return Stack(
-      clipBehavior: Clip.none,
-      alignment: Alignment.center,
-      children: [
-        Image.asset(
-          'assets/images/road_of_luck/price_bg.png',
-          width: _priceBgWidth,
-          height: _priceBgHeight,
-          fit: BoxFit.contain,
-          errorBuilder: (context, error, stackTrace) => Container(
-            width: _priceBgWidth,
-            height: _priceBgHeight,
-            color: Colors.brown.shade800,
+    final w = _priceBgWidth * scale;
+    final h = _priceBgHeight * scale;
+    final fontSize = 19.11 * scale;
+    return SizedBox(
+      width: w,
+      height: h,
+      child: Stack(
+        clipBehavior: Clip.none,
+        fit: StackFit.expand,
+        alignment: Alignment.center,
+        children: [
+          Image.asset(
+            'assets/images/road_of_luck/price_bg.png',
+            width: w,
+            height: h,
+            fit: BoxFit.fill,
+            errorBuilder: (context, error, stackTrace) => Container(
+              width: w,
+              height: h,
+              color: Colors.brown.shade800,
+            ),
           ),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-          child: Transform.translate(
-            offset: const Offset(0, -2),
+          Center(
             child: Stack(
-            children: [
-              Text(
-                price,
-                style: GoogleFonts.montserrat(
-                  fontWeight: FontWeight.w900,
-                  fontSize: 19.11,
-                  height: 1.6,
-                  letterSpacing: -0.02,
-                  foreground: Paint()
-                    ..style = PaintingStyle.stroke
-                    ..strokeWidth = 1.2
-                    ..color = _borderColor,
-                  shadows: [
-                    Shadow(
-                      color: _borderColor,
-                      offset: const Offset(0, 1.79),
-                      blurRadius: 0,
-                    ),
-                  ],
+              alignment: Alignment.center,
+              children: [
+                Text(
+                  price,
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.montserrat(
+                    fontWeight: FontWeight.w900,
+                    fontSize: fontSize,
+                    height: 1.6,
+                    letterSpacing: -0.02,
+                    foreground: Paint()
+                      ..style = PaintingStyle.stroke
+                      ..strokeWidth = 1.2
+                      ..color = _borderColor,
+                    shadows: [
+                      Shadow(
+                        color: _borderColor,
+                        offset: const Offset(0, 1.79),
+                        blurRadius: 0,
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              Text(
-                price,
-                style: GoogleFonts.montserrat(
-                  fontWeight: FontWeight.w900,
-                  fontSize: 19.11,
-                  height: 1.6,
-                  letterSpacing: -0.02,
-                  color: textColor,
-                  shadows: [
-                    Shadow(
-                      color: _borderColor,
-                      offset: const Offset(0, 1.79),
-                      blurRadius: 0,
-                    ),
-                  ],
+                Text(
+                  price,
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.montserrat(
+                    fontWeight: FontWeight.w900,
+                    fontSize: fontSize,
+                    height: 1.6,
+                    letterSpacing: -0.02,
+                    color: textColor,
+                    shadows: [
+                      Shadow(
+                        color: _borderColor,
+                        offset: const Offset(0, 1.79),
+                        blurRadius: 0,
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
-  Widget _buildAmountText(String text, bool isActive) {
+  Widget _buildAmountText(String text, bool isActive, double scale) {
     final textColor = isActive ? _amountColor : _inactiveTextColor;
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+      padding: EdgeInsets.symmetric(horizontal: 4 * scale, vertical: 2 * scale),
       child: Stack(
         children: [
           Text(
             text,
             style: GoogleFonts.montserrat(
               fontWeight: FontWeight.w900,
-              fontSize: _amountFontSize,
+              fontSize: _amountFontSize * scale,
               height: 1.6,
               letterSpacing: -0.02,
               foreground: Paint()
@@ -564,7 +585,7 @@ class _RoadOfLuckScreenState extends State<RoadOfLuckScreen> {
             text,
             style: GoogleFonts.montserrat(
               fontWeight: FontWeight.w900,
-              fontSize: _amountFontSize,
+              fontSize: _amountFontSize * scale,
               height: 1.6,
               letterSpacing: -0.02,
               color: textColor,

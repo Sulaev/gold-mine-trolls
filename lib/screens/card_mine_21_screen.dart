@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -42,6 +43,8 @@ class _CardMine21ScreenState extends State<CardMine21Screen>
   bool _loadingBalance = true;
 
   Timer? _adjustTimer;
+  Timer? _loseOverlayTimer;
+  Timer? _winOverlayAutoHideTimer;
   Stopwatch? _adjustWatch;
   int _activeDelta = 0;
 
@@ -203,6 +206,8 @@ class _CardMine21ScreenState extends State<CardMine21Screen>
   @override
   void dispose() {
     _cardsLandedTimer?.cancel();
+    _loseOverlayTimer?.cancel();
+    _winOverlayAutoHideTimer?.cancel();
     _cardsLandedNotifier.dispose();
     BalanceService.balanceNotifier.removeListener(_onBalanceNotifierChanged);
     _adjustTimer?.cancel();
@@ -356,6 +361,8 @@ class _CardMine21ScreenState extends State<CardMine21Screen>
   }
 
   Future<void> _newRound() async {
+    _loseOverlayTimer?.cancel();
+    _winOverlayAutoHideTimer?.cancel();
     _dismissWinOverlay();
     await _startRoundWithBet();
   }
@@ -442,6 +449,11 @@ class _CardMine21ScreenState extends State<CardMine21Screen>
           unawaited(AudioService.instance.playLose());
           setState(() => _showResultOverlay = true);
           _notificationController.forward(from: 0);
+          _loseOverlayTimer?.cancel();
+          _loseOverlayTimer = Timer(const Duration(milliseconds: 1500), () {
+            if (!mounted) return;
+            unawaited(_newRound());
+          });
         }),
       );
     }
@@ -482,11 +494,17 @@ class _CardMine21ScreenState extends State<CardMine21Screen>
   }
 
   void _showWinOverlay(int amount) {
+    _winOverlayAutoHideTimer?.cancel();
     _overlayTargetWin = amount;
     _overlayAnimatedWin = 0;
     _isWinOverlayVisible = true;
     _notificationController.forward(from: 0);
     _winCountController.forward(from: 0);
+    _winOverlayAutoHideTimer = Timer(const Duration(milliseconds: 2000), () {
+      if (!mounted) return;
+      _dismissWinOverlay();
+      unawaited(_newRound());
+    });
   }
 
   void _dismissWinOverlay() {
@@ -516,7 +534,8 @@ class _CardMine21ScreenState extends State<CardMine21Screen>
     return b.toString();
   }
 
-  Widget _buildOutlinedValue(String value, {double size = 18.58}) {
+  Widget _buildOutlinedValue(String value, {double size = 18.58, double? letterSpacing}) {
+    final ls = letterSpacing ?? -0.02 * size;
     return Stack(
       children: [
         Text(
@@ -526,7 +545,7 @@ class _CardMine21ScreenState extends State<CardMine21Screen>
             fontWeight: FontWeight.w900,
             fontSize: size,
             height: 1.6,
-            letterSpacing: -0.02 * size,
+            letterSpacing: ls,
             foreground: Paint()
               ..style = PaintingStyle.stroke
               ..strokeWidth = size * 0.046
@@ -540,7 +559,7 @@ class _CardMine21ScreenState extends State<CardMine21Screen>
             fontWeight: FontWeight.w900,
             fontSize: size,
             height: 1.6,
-            letterSpacing: -0.02 * size,
+            letterSpacing: ls,
             color: _balanceFill,
           ),
         ),
@@ -678,12 +697,15 @@ class _CardMine21ScreenState extends State<CardMine21Screen>
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  SizedBox(
-                    width: 22 * scale,
-                    height: 22 * scale,
-                    child: Image.asset(
-                      'assets/images/main_screen/coin_icon.png',
-                      fit: BoxFit.contain,
+                  Transform.translate(
+                    offset: const Offset(0, 2),
+                    child: SizedBox(
+                      width: 22 * scale,
+                      height: 22 * scale,
+                      child: Image.asset(
+                        'assets/images/main_screen/coin_icon.png',
+                        fit: BoxFit.contain,
+                      ),
                     ),
                   ),
                   SizedBox(width: 6 * scale),
@@ -1053,49 +1075,61 @@ class _CardMine21ScreenState extends State<CardMine21Screen>
                     ),
                   ),
                 ),
-                Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      'YOUR BET:',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontFamily: 'Montserrat',
-                        fontWeight: FontWeight.w900,
-                        fontSize: 10.5 * scale,
-                      ),
-                    ),
-                    SizedBox(height: 2 * scale),
-                    Transform.translate(
-                      offset: Offset(0, -6 * scale),
-                      child: Center(
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            SizedBox(
-                              width: 24 * scale,
-                              height: 24 * scale,
-                              child: Image.asset(
-                                'assets/images/shop/coin_icon.png',
-                                fit: BoxFit.contain,
-                              ),
-                            ),
-                            SizedBox(width: 6 * scale),
-                            _buildOutlinedValue(
-                              _formatAmount(_bet),
-                              size: 19 * scale,
-                            ),
-                          ],
+                Center(
+                  child: Transform.translate(
+                    offset: const Offset(0, 2),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'YOUR BET:',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontFamily: 'Gotham',
+                            color: Colors.white,
+                            fontWeight: FontWeight.w900,
+                            fontSize: 11.3 * scale,
+                            height: 1.4,
+                            letterSpacing: -0.02 * 11.3 * scale,
+                          ),
                         ),
-                      ),
+                        SizedBox(height: 2 * scale),
+                        Transform.translate(
+                          offset: const Offset(0, -5),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Transform.translate(
+                                offset: const Offset(0, 2),
+                                child: SizedBox(
+                                  width: 22 * scale,
+                                  height: 22 * scale,
+                                  child: Image.asset(
+                                    'assets/images/shop/coin_icon.png',
+                                    fit: BoxFit.contain,
+                                  ),
+                                ),
+                              ),
+                              SizedBox(width: 6 * scale),
+                              _buildOutlinedValue(
+                                _formatAmount(_bet),
+                                size: (_bet > 999999 ? 19 : 20) * scale,
+                                letterSpacing: -0.04 * (_bet > 999999 ? 19 : 20) * scale,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
-              ],
-            ),
+            ],
           ),
         ),
       ),
+    ),
     );
   }
 
@@ -1119,20 +1153,7 @@ class _CardMine21ScreenState extends State<CardMine21Screen>
             SizedBox(height: 12 * scale),
             Transform.translate(
               offset: Offset(0, -25 * scale),
-              child: PressableButton(
-                onTap: () async {
-                  HapticFeedback.lightImpact();
-                  await _newRound();
-                },
-                child: SizedBox(
-                  width: 204 * scale,
-                  height: 45 * scale,
-                  child: Image.asset(
-                    'assets/images/card_mine_21/trayagain_btn.png',
-                    fit: BoxFit.fill,
-                  ),
-                ),
-              ),
+              child: SizedBox(width: 208 * scale, height: 45 * scale),
             ),
           ],
         );
@@ -1336,7 +1357,10 @@ class _CardMine21ScreenState extends State<CardMine21Screen>
     return Scaffold(
       body: LayoutBuilder(
         builder: (context, constraints) {
-          final scale = (constraints.maxWidth / 390).clamp(0.82, 1.3).toDouble();
+          final scale = min(
+            constraints.maxWidth / 390,
+            constraints.maxHeight / 844,
+          ).clamp(0.82, 1.3).toDouble();
           final screenWidth = constraints.maxWidth;
           return Stack(
             children: [
@@ -1390,12 +1414,7 @@ class _CardMine21ScreenState extends State<CardMine21Screen>
               ),
               if (_isWinOverlayVisible)
                 Positioned.fill(
-                  child: GestureDetector(
-                    onTap: () {
-                      HapticFeedback.lightImpact();
-                      _dismissWinOverlay();
-                    },
-                    behavior: HitTestBehavior.opaque,
+                  child: IgnorePointer(
                     child: FadeTransition(
                       opacity: CurvedAnimation(
                         parent: _notificationController,
@@ -1404,28 +1423,6 @@ class _CardMine21ScreenState extends State<CardMine21Screen>
                       child: Container(
                         color: const Color(0x70000000),
                         child: Center(child: _buildWinOverlay(scale)),
-                      ),
-                    ),
-                  ),
-                ),
-              if (_isWinState)
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: (12 * scale) + (30 * scale),
-                  child: Center(
-                    child: PressableButton(
-                      onTap: () async {
-                        HapticFeedback.lightImpact();
-                        await _newRound();
-                      },
-                      child: SizedBox(
-                        width: 300 * scale,
-                        height: 65 * scale,
-                        child: Image.asset(
-                          'assets/images/card_mine_21/play_btn.png',
-                          fit: BoxFit.fill,
-                        ),
                       ),
                     ),
                   ),

@@ -9,6 +9,7 @@ import 'package:gold_mine_trolls/screens/shop_screen.dart';
 import 'package:gold_mine_trolls/services/analytics_service.dart';
 import 'package:gold_mine_trolls/services/audio_service.dart';
 import 'package:gold_mine_trolls/services/balance_service.dart';
+import 'package:gold_mine_trolls/services/settings_service.dart';
 import 'package:gold_mine_trolls/widgets/pressable_button.dart';
 import 'package:gold_mine_trolls/widgets/tap_banner.dart';
 import 'package:gold_mine_trolls/widgets/warning_panel.dart';
@@ -37,17 +38,22 @@ class _GoldenAvalancheScreenState extends State<GoldenAvalancheScreen>
   static const _chestWidth = 36.0;
   static const _chestHeight = 33.0;
   static const _chestGap = 2.0;
+  static const _chestDisplayScale = 1.1; // сундуки на 10% больше визуально
   static const _pegRows = [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13];
   static final _pegFitScale = (9 * _chestWidth + 8 * _chestGap) /
       (13 * _pegSize + 12 * _pegGap);
 
   static const _maxFallingBalls = 10;
-  // Low: edge X0.5, X0.3, X0.2, X0.1, center X1.1
-  static const _multipliersLow = [0.5, 0.3, 0.2, 0.1, 1.1, 0.1, 0.2, 0.3, 0.5];
-  // Normal: edge X1.5, X0.5, X0.2, X0.1, center X1.5
-  static const _multipliersMedium = [1.5, 0.5, 0.2, 0.1, 1.5, 0.1, 0.2, 0.5, 1.5];
-  // High: edge X3.0, X0.8, X0.2, X0.05, center X1.5
-  static const _multipliersHigh = [3.0, 0.8, 0.2, 0.05, 1.5, 0.05, 0.2, 0.8, 3.0];
+  /// Мин. скорость «в колышек» (px/с); 380 было слишком — почти никогда не срабатывало.
+  static const _pegSfxMinApproachSpeed = 95.0;
+  static const _pegSfxBallCooldownFrames = 10;
+  static const _pegSfxSamePegCooldownSteps = 14;
+  // Low: edge X1.2, X0.3, X1.5, X0.1, center X1.2
+  static const _multipliersLow = [1.2, 0.3, 1.5, 0.1, 1.2, 0.1, 1.5, 0.3, 1.2];
+  // Normal: edge X1.5, X0.5, X1.5, X0.1, center X1.5
+  static const _multipliersMedium = [1.5, 0.5, 1.5, 0.1, 1.5, 0.1, 1.5, 0.5, 1.5];
+  // High: edge X3.0, X0.8, X1.5, X0.05, center X1.5
+  static const _multipliersHigh = [3.0, 0.8, 1.5, 0.05, 1.5, 0.05, 1.5, 0.8, 3.0];
 
   final _rng = Random();
   late final AnimationController _balanceCountController;
@@ -70,10 +76,15 @@ class _GoldenAvalancheScreenState extends State<GoldenAvalancheScreen>
   Timer? _adjustTimer;
   Stopwatch? _adjustWatch;
   int _activeDelta = 0;
+  int _gaPhysicsStep = 0;
+  List<int> _pegSfxUnlockStep = [];
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(AudioService.instance.warmUpGoldenAvalanchePegClicks());
+    });
     unawaited(AnalyticsService.reportGameStart(_gameName));
     _balanceCountController =
         AnimationController(
@@ -182,7 +193,8 @@ class _GoldenAvalancheScreenState extends State<GoldenAvalancheScreen>
     return value.toString();
   }
 
-  Widget _buildOutlinedValue(String value, {double size = 18.58}) {
+  Widget _buildOutlinedValue(String value, {double size = 18.58, double? letterSpacing}) {
+    final ls = letterSpacing ?? -0.02 * size;
     return Stack(
       children: [
         Text(
@@ -192,7 +204,7 @@ class _GoldenAvalancheScreenState extends State<GoldenAvalancheScreen>
             fontWeight: FontWeight.w900,
             fontSize: size,
             height: 1.6,
-            letterSpacing: -0.02 * size,
+            letterSpacing: ls,
             foreground: Paint()
               ..style = PaintingStyle.stroke
               ..strokeWidth = size * 0.046
@@ -206,7 +218,7 @@ class _GoldenAvalancheScreenState extends State<GoldenAvalancheScreen>
             fontWeight: FontWeight.w900,
             fontSize: size,
             height: 1.6,
-            letterSpacing: -0.02 * size,
+            letterSpacing: ls,
             color: _balanceFill,
           ),
         ),
@@ -238,10 +250,11 @@ class _GoldenAvalancheScreenState extends State<GoldenAvalancheScreen>
   }
 
   void _runPhysicsStep(double scale) {
+    _gaPhysicsStep++;
     const dt = 1 / 60.0;
-    const gravity = 420.0;
-    const bounceDamping = 0.65;
-    const wallBounceDamping = 0.55;
+    const gravity = 1500.0; // железные шарики — естественное падение
+    const bounceDamping = 0.58; // потеря энергии при ударе о колышки (как у стали)
+    const wallBounceDamping = 0.48; // стены поглощают больше
     const ballRadius = _ballSize / 2;
     const pegRadius = _pegSize / 2;
 
@@ -260,9 +273,17 @@ class _GoldenAvalancheScreenState extends State<GoldenAvalancheScreen>
     final chestW = _chestWidth * scale;
     final chestGap = _chestGap * scale;
     final totalChestWidth = 9 * chestW + 8 * chestGap;
+    final pegCount = pegPositions.length;
+    if (_pegSfxUnlockStep.length != pegCount) {
+      _pegSfxUnlockStep = List.filled(pegCount, -999999);
+    }
 
     for (final ball in _balls) {
       if (ball.chestIndex != null) continue;
+
+      if (ball.pegHitSoundCooldown > 0) {
+        ball.pegHitSoundCooldown--;
+      }
 
       ball.vy += gravity * dt;
       ball.x += ball.vx * dt;
@@ -310,8 +331,9 @@ class _GoldenAvalancheScreenState extends State<GoldenAvalancheScreen>
         }
       }
 
-      for (var iter = 0; iter < 3; iter++) {
-        for (final peg in pegPositions) {
+      for (var iter = 0; iter < 2; iter++) {
+        for (var pi = 0; pi < pegCount; pi++) {
+          final peg = pegPositions[pi];
           final dx = ball.x - peg.dx;
           final dy = ball.y - peg.dy;
           final dist = sqrt(dx * dx + dy * dy);
@@ -326,6 +348,16 @@ class _GoldenAvalancheScreenState extends State<GoldenAvalancheScreen>
             if (vn < 0) {
               ball.vx -= (1 + bounceDamping) * vn * nx;
               ball.vy -= (1 + bounceDamping) * vn * ny;
+              final hardHit = vn <= -_pegSfxMinApproachSpeed;
+              final pegFree = _gaPhysicsStep >= _pegSfxUnlockStep[pi];
+              if (hardHit &&
+                  pegFree &&
+                  ball.pegHitSoundCooldown == 0) {
+                _pegSfxUnlockStep[pi] =
+                    _gaPhysicsStep + _pegSfxSamePegCooldownSteps;
+                ball.pegHitSoundCooldown = _pegSfxBallCooldownFrames;
+                AudioService.instance.playGoldenAvalanchePegClick();
+              }
             }
           }
         }
@@ -346,7 +378,8 @@ class _GoldenAvalancheScreenState extends State<GoldenAvalancheScreen>
           ball.win = win;
           ball.y = chestRowTop - ballR;
 
-          unawaited(AudioService.instance.playGoldenAvalancheCoin());
+          AudioService.instance.playGoldenAvalancheCoin();
+          SettingsService.hapticSelectionClick();
           if (win > 0) {
             unawaited(AnalyticsService.reportGameWin(_gameName));
           } else {
@@ -396,10 +429,11 @@ class _GoldenAvalancheScreenState extends State<GoldenAvalancheScreen>
     }
   }
 
-  void _startPhysicsTicker(double scale) {
+  void _startPhysicsTicker() {
     _physicsTicker?.dispose();
     _physicsTicker = createTicker((elapsed) {
       if (!mounted) return;
+      final scale = _plinkoScale.clamp(0.5, 2.0);
       _runPhysicsStep(scale);
       setState(() {});
     });
@@ -437,12 +471,15 @@ class _GoldenAvalancheScreenState extends State<GoldenAvalancheScreen>
       id: _ballSeq++,
       x: startX,
       y: startY,
-      vx: (_rng.nextDouble() - 0.5) * 20,
+      vx: (_rng.nextDouble() - 0.5) * 5,
       vy: 0,
     );
     setState(() => _balls.add(ball));
 
-    _startPhysicsTicker(_plinkoScale);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _startPhysicsTicker();
+    });
   }
 
   Future<void> _applyBetDelta(int delta, {bool haptic = true}) async {
@@ -555,12 +592,15 @@ class _GoldenAvalancheScreenState extends State<GoldenAvalancheScreen>
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  SizedBox(
-                    width: 22 * scale,
-                    height: 22 * scale,
-                    child: Image.asset(
-                      'assets/images/main_screen/coin_icon.png',
-                      fit: BoxFit.contain,
+                  Transform.translate(
+                    offset: const Offset(0, 2),
+                    child: SizedBox(
+                      width: 22 * scale,
+                      height: 22 * scale,
+                      child: Image.asset(
+                        'assets/images/main_screen/coin_icon.png',
+                        fit: BoxFit.contain,
+                      ),
                     ),
                   ),
                   SizedBox(width: 6 * scale),
@@ -717,48 +757,60 @@ class _GoldenAvalancheScreenState extends State<GoldenAvalancheScreen>
                     ),
                   ),
                 ),
-                Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      'YOUR BET:',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontFamily: 'Montserrat',
-                        fontWeight: FontWeight.w900,
-                        fontSize: 10.5 * scale,
-                      ),
-                    ),
-                    SizedBox(height: 2 * scale),
-                    Transform.translate(
-                      offset: Offset(0, -6 * scale),
-                      child: Center(
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            SizedBox(
-                              width: 24 * scale,
-                              height: 24 * scale,
-                              child: Image.asset(
-                                'assets/images/shop/coin_icon.png',
-                                fit: BoxFit.contain,
-                              ),
-                            ),
-                            SizedBox(width: 6 * scale),
-                            _buildOutlinedValue(
-                              _formatAmount(_bet),
-                              size: 19 * scale,
-                            ),
-                          ],
+                Center(
+                  child: Transform.translate(
+                    offset: const Offset(0, 2),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'YOUR BET:',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontFamily: 'Gotham',
+                            color: Colors.white,
+                            fontWeight: FontWeight.w900,
+                            fontSize: 11.3 * scale,
+                            height: 1.4,
+                            letterSpacing: -0.02 * 11.3 * scale,
+                          ),
                         ),
-                      ),
+                        SizedBox(height: 2 * scale),
+                        Transform.translate(
+                          offset: const Offset(0, -5),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Transform.translate(
+                                offset: const Offset(0, 2),
+                                child: SizedBox(
+                                  width: 22 * scale,
+                                  height: 22 * scale,
+                                  child: Image.asset(
+                                    'assets/images/shop/coin_icon.png',
+                                    fit: BoxFit.contain,
+                                  ),
+                                ),
+                              ),
+                              SizedBox(width: 6 * scale),
+                              _buildOutlinedValue(
+                                _formatAmount(_bet),
+                                size: (_bet > 999999 ? 19 : 20) * scale,
+                                letterSpacing: -0.04 * (_bet > 999999 ? 19 : 20) * scale,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
-              ],
-            ),
+            ],
           ),
         ),
+      ),
         SizedBox(width: 44 * scale),
         Column(
           mainAxisSize: MainAxisSize.min,
@@ -809,7 +861,7 @@ class _GoldenAvalancheScreenState extends State<GoldenAvalancheScreen>
   void _scheduleAutoDrop() {
     _autoDropTimer?.cancel();
     if (!_autoDrop || !mounted) return;
-    _autoDropTimer = Timer(const Duration(seconds: 3), () {
+    _autoDropTimer = Timer(const Duration(milliseconds: 100), () {
       if (!mounted || !_autoDrop) return;
       if (_canDropMore && _balance >= _bet) {
         _onDrop();
@@ -886,9 +938,11 @@ class _GoldenAvalancheScreenState extends State<GoldenAvalancheScreen>
   }
 
   Widget _buildPlinkoField(double scale) {
-    final boardWidth = (9 * _chestWidth + 8 * _chestGap) * scale;
+    final gameFieldWidth = (9 * _chestWidth + 8 * _chestGap) * scale;
+    final chestRowWidth = (9 * _chestWidth * _chestDisplayScale + 8 * _chestGap) * scale;
+    final fieldWidth = chestRowWidth;
     return SizedBox(
-      width: boardWidth,
+      width: fieldWidth,
       child: Stack(
         alignment: Alignment.topCenter,
         children: [
@@ -933,7 +987,10 @@ class _GoldenAvalancheScreenState extends State<GoldenAvalancheScreen>
     );
   }
 
+  static const _multiplierTextSize = 12.5;
+
   Widget _buildMultiplierText(double mult, double scale) {
+    final size = _multiplierTextSize * scale;
     return Stack(
       children: [
         Text(
@@ -941,9 +998,9 @@ class _GoldenAvalancheScreenState extends State<GoldenAvalancheScreen>
           style: TextStyle(
             fontFamily: 'Gotham',
             fontWeight: FontWeight.w900,
-            fontSize: 9.85 * scale,
+            fontSize: size,
             height: 1.6,
-            letterSpacing: -0.04 * 9.85 * scale,
+            letterSpacing: -0.04 * size,
             foreground: Paint()
               ..style = PaintingStyle.stroke
               ..strokeWidth = 0.59 * scale
@@ -955,9 +1012,9 @@ class _GoldenAvalancheScreenState extends State<GoldenAvalancheScreen>
           style: TextStyle(
             fontFamily: 'Gotham',
             fontWeight: FontWeight.w900,
-            fontSize: 9.85 * scale,
+            fontSize: size,
             height: 1.6,
-            letterSpacing: -0.04 * 9.85 * scale,
+            letterSpacing: -0.04 * size,
             color: Colors.white,
           ),
         ),
@@ -969,10 +1026,12 @@ class _GoldenAvalancheScreenState extends State<GoldenAvalancheScreen>
     const chestW = _chestWidth;
     const chestH = _chestHeight;
     const gap = _chestGap;
-    final totalW = 9 * chestW + 8 * gap;
+    final chestDisplayW = chestW * _chestDisplayScale;
+    final chestDisplayH = chestH * _chestDisplayScale;
+    final totalW = 9 * chestDisplayW + 8 * gap;
     return SizedBox(
       width: totalW * scale,
-      height: (chestH + 24) * scale,
+      height: (chestDisplayH + 24) * scale,
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: List.generate(9, (i) {
@@ -981,8 +1040,8 @@ class _GoldenAvalancheScreenState extends State<GoldenAvalancheScreen>
           return Padding(
             padding: EdgeInsets.only(right: i < 8 ? gap * scale : 0),
             child: SizedBox(
-              width: chestW * scale,
-              height: (chestH + 24) * scale,
+              width: chestDisplayW * scale,
+              height: (chestDisplayH + 24) * scale,
               child: Stack(
                 clipBehavior: Clip.none,
                 alignment: Alignment.topCenter,
@@ -998,8 +1057,8 @@ class _GoldenAvalancheScreenState extends State<GoldenAvalancheScreen>
                         return Transform.translate(
                           offset: Offset(0, dy),
                           child: SizedBox(
-                            width: chestW * scale,
-                            height: chestH * scale,
+                            width: chestDisplayW * scale,
+                            height: chestDisplayH * scale,
                             child: Image.asset(
                               'assets/images/golden_avalanche/chest.png',
                               fit: BoxFit.fill,
@@ -1010,15 +1069,15 @@ class _GoldenAvalancheScreenState extends State<GoldenAvalancheScreen>
                     )
                   else
                     SizedBox(
-                      width: chestW * scale,
-                      height: chestH * scale,
+                      width: chestDisplayW * scale,
+                      height: chestDisplayH * scale,
                       child: Image.asset(
                         'assets/images/golden_avalanche/chest.png',
                         fit: BoxFit.fill,
                       ),
                     ),
                   Positioned(
-                    bottom: 18 * scale,
+                    bottom: 18 * scale * _chestDisplayScale,
                     left: 0,
                     right: 0,
                     child: Center(
@@ -1047,7 +1106,7 @@ class _GoldenAvalancheScreenState extends State<GoldenAvalancheScreen>
                       curve: Curves.easeOut,
                       builder: (_, t, _) {
                         final y =
-                            chestH * scale / 2 + 20 * scale - 60 * t * scale;
+                            chestDisplayH * scale / 2 + 20 * scale - 60 * t * scale;
                         return Positioned(
                           left: 0,
                           right: 0,
@@ -1111,9 +1170,10 @@ class _GoldenAvalancheScreenState extends State<GoldenAvalancheScreen>
     return Scaffold(
       body: LayoutBuilder(
         builder: (context, constraints) {
-          final scale = (constraints.maxWidth / 390)
-              .clamp(0.82, 1.3)
-              .toDouble();
+          final scale = min(
+                constraints.maxWidth / 390,
+                constraints.maxHeight / 844,
+              ).clamp(0.82, 1.3).toDouble();
           _plinkoScale = scale;
           return Stack(
             children: [
@@ -1169,6 +1229,8 @@ class _FallingBall {
   double vy;
   int? chestIndex;
   int? win;
+  /// Кадры до следующего щелчка по колышку (этот шар).
+  int pegHitSoundCooldown = 0;
   _FallingBall({
     required this.id,
     required this.x,

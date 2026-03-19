@@ -25,10 +25,14 @@ Future<void> main() async {
   await BalanceService.init();
   await SettingsService.init();
 
-  // Preload text fonts so styles apply immediately, not when text first appears
+  // Preload all fonts so text renders correctly from first frame (no size flash)
   await GoogleFonts.pendingFonts(<TextStyle>[
-    GoogleFonts.montserrat(),
-    GoogleFonts.gothicA1(),
+    GoogleFonts.montserrat(fontWeight: FontWeight.w400),
+    GoogleFonts.montserrat(fontWeight: FontWeight.w700),
+    GoogleFonts.montserrat(fontWeight: FontWeight.w900),
+    GoogleFonts.gothicA1(fontWeight: FontWeight.w400),
+    GoogleFonts.gothicA1(fontWeight: FontWeight.w700),
+    GoogleFonts.gothicA1(fontWeight: FontWeight.w900),
   ]);
 
   runApp(const GoldMineTrollsApp());

@@ -2,7 +2,7 @@ name: gold_mine_trolls
 description: Gold Mine Trolls - mobile casino-style game collection
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
-publish_to: 'none' # Remove this line if you wish to publish to pub.dev
+publish_to: "none" # Remove this line if you wish to publish to pub.dev
 
 # The following defines the version and build number for your application.
 # A version number is three numbers separated by dots, like 1.2.43
@@ -60,11 +60,20 @@ dev_dependencies:
 
 # The following section is specific to Flutter packages.
 flutter:
-
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
+
+  fonts:
+    - family: Gotham
+      fonts:
+        - asset: assets/fonts/Gotham-Black.otf
+          weight: 900
+    - family: Gilroy
+      fonts:
+        - asset: assets/fonts/Gilroy-ExtraBold.otf
+          weight: 800
 
   assets:
     - assets/images/
@@ -83,6 +92,8 @@ flutter:
     - assets/images/welcome_bonus/
     - assets/images/tutorial/
     - assets/images/main_screen/
+    - assets/images/main_screen/game_banners/
+    - assets/fonts/
     - assets/images/settings/
     - assets/images/paywall/
     - assets/images/shop/

@@ -43,6 +43,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       letterSpacing: -0.02 * 16 * _scale,
       decoration: TextDecoration.underline,
       decorationColor: Colors.white,
+      decorationStyle: TextDecorationStyle.solid,
+      decorationThickness: 2.5,
       color: Colors.white,
     );
   }
@@ -415,9 +417,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Text('Privacy policy', style: _footerLinkStyle()),
+                      Text('PRIVACY POLICY', style: _footerLinkStyle()),
                       SizedBox(width: 16 * _scale),
-                      Text('Terms of Use', style: _footerLinkStyle()),
+                      Text('TERMS OF USE', style: _footerLinkStyle()),
                     ],
                   ),
                 ),

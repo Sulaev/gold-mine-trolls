@@ -10,8 +10,10 @@ import 'package:gold_mine_trolls/screens/shop_screen.dart';
 import 'package:gold_mine_trolls/services/analytics_service.dart';
 import 'package:gold_mine_trolls/services/audio_service.dart';
 import 'package:gold_mine_trolls/services/balance_service.dart';
+import 'package:gold_mine_trolls/services/tutorial_service.dart';
 import 'package:gold_mine_trolls/screens/info_screen.dart';
 import 'package:gold_mine_trolls/widgets/gold_vein_info_content.dart';
+import 'package:gold_mine_trolls/screens/gold_vein_constants.dart';
 import 'package:gold_mine_trolls/widgets/pressable_button.dart';
 import 'package:gold_mine_trolls/widgets/tap_banner.dart';
 import 'package:gold_mine_trolls/widgets/warning_panel.dart';
@@ -27,7 +29,7 @@ class GoldVeinScreen extends StatefulWidget {
 }
 
 class _GoldVeinScreenState extends State<GoldVeinScreen>
-    with TickerProviderStateMixin {
+    with TickerProviderStateMixin, WidgetsBindingObserver {
   static const _gameName = 'gold_vein';
   static const _rows = 5;
   static const _cols = 3;
@@ -36,25 +38,21 @@ class _GoldVeinScreenState extends State<GoldVeinScreen>
   static const _baseBet = 10000;
   static const _balanceStroke = Color(0x40000000);
   static const _balanceFill = Color(0xFFFFFFFF);
-  static const _slotBoardWidth = 428.0;
-  static const _slotBoardHeight = 478.0;
-  static const _slotRowGap = 6.0;
-  static const _slotColGap = 20.0;
-  static const _slotCellWidth = 78.0;
-  static const _slotCellHeight = 70.0;
+  static const _slotBoardWidth = GoldVeinSlotZones.viewWidth;
+  static const _slotBoardHeight = GoldVeinSlotZones.viewHeight;
   static const _slotSymbolWidth = 60.0;
   static const _slotSymbolHeight = 48.0;
-  static const _slotGridTop = 35.0;
-  static const _slotGridOffsetX = -24.0;
-  static const _slotGridOffsetY = 10.0;
   static const _tutorialOverlayColor = Color(0xB36D2E11);
   static const _tutorialBubbleWidth = 209.0;
   static const _tutorialBubbleHeight = 80.0;
   static const _tutorialBubbleStep3Width = 230.0;
   static const _tutorialTrollSize = 280.0;
+  /// Step 3 overlay: visual troll size vs base layout (try 2.0 for adaptive preview).
+  static const _tutorialStep3TrollScale = 2.0;
   static const _tutorialStep1DoneKey = 'tutorial_step_1_done';
   static const _tutorialStep2DoneKey = 'tutorial_step_2_done';
   static const _tutorialStep3DoneKey = 'tutorial_step_3_done';
+  static const _postTutorialJackpotGivenKey = 'gold_vein_post_tutorial_jackpot_given';
 
   final Random _rng = Random();
   late final AnimationController _winPulseController;
@@ -79,10 +77,14 @@ class _GoldVeinScreenState extends State<GoldVeinScreen>
   bool _loadingBalance = true;
   int _tutorialStep = 0;
   bool _tutorialStateLoaded = false;
+  bool _goldVeinTutorialCompleted = false;
+  bool _postTutorialJackpotGiven = false;
   int _spinsSinceEntry = 0;
 
-  /// Wins only on every 5th spin (5, 10, 15, ...). No wins during tutorial or first 5 spins.
-  static const _winSpinInterval = 5;
+  /// Guaranteed 1 win per 4 spins. Which spin wins is random; after a win, next 3 are losses.
+  static const _winChanceOutOf = 4;
+  int _spinsInCycle = 0; // 0..3, which spin in current cycle
+  int _winningSpinInCycle = 0; // 0..3, chosen at cycle start
 
   String _centerMessage = '';
   bool _isCenterWin = false;
@@ -125,36 +127,36 @@ class _GoldVeinScreenState extends State<GoldVeinScreen>
     'assets/images/gold_vein/slots/1.12.png',
   ];
 
-  // Higher weight -> more frequent symbol. Low-value symbols more common; high-value (big wins) rare.
+  // Higher weight -> more frequent symbol. All symbols positive; high-value (big wins) rarer.
   final List<int> _symbolWeights = const [
-    2,  // 1.1: 10x — rare
-    14,
-    16,
+    1,  // 1.1: 10x — very rare
     12,
-    18,
+    14,
     10,
-    2,  // 1.7: 6.5x — rare
-    6,
-    1,  // 1.9: 8.2x — very rare
+    16,
     8,
-    2,  // 1.11: 4.8x — rare
-    11,
+    1,  // 1.7: 6.5x — very rare
+    4,
+    1,  // 1.9: 8.2x — very rare
+    6,
+    1,  // 1.11: 4.8x — very rare
+    9,
   ];
 
-  // Payout multipliers per payline (3 matching symbols) — matches info screen.
+  // Payout multipliers per payline (3 matching symbols) — all positive, matches info screen.
   final List<double> _symbolMultipliers = const [
     10.0, // 1.1
     1.3, // 1.2
-    0.4, // 1.3
-    0.7, // 1.4
-    0.2, // 1.5
+    1.4, // 1.3
+    1.6, // 1.4
+    1.1, // 1.5
     2.6, // 1.6
     6.5, // 1.7
     3.5, // 1.8
     8.2, // 1.9
     1.8, // 1.10
     4.8, // 1.11
-    0.9, // 1.12
+    2.3, // 1.12
   ];
 
   /// Jackpot: all 15 cells same symbol. Odds 1:1000.
@@ -163,9 +165,22 @@ class _GoldVeinScreenState extends State<GoldVeinScreen>
   /// Jackpot payout multiplier (bet × this).
   static const _jackpotMultiplier = 100.0;
 
+  /// Symbol index for diamond (1.9.png) — used for post-tutorial fixed win.
+  static const _diamondSymbolIndex = 8;
+
+  /// Fixed jackpot amount after tutorial completion.
+  static const _postTutorialJackpot = 10000;
+
+  final GlobalKey _tutorialStep3SpinKey = GlobalKey();
+  final GlobalKey _tutorialStep3OverlayKey = GlobalKey();
+  final ScrollController _goldVeinScrollController = ScrollController();
+  Rect? _tutorialStep3SpinRect;
+  bool _tutorialStep3ScrollAttached = false;
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     unawaited(AnalyticsService.reportGameStart(_gameName));
     _winPulseController = AnimationController(
       vsync: this,
@@ -217,6 +232,65 @@ class _GoldVeinScreenState extends State<GoldVeinScreen>
     _loadTutorialState();
   }
 
+  @override
+  void didChangeMetrics() {
+    super.didChangeMetrics();
+    if (_tutorialStep == 3) _scheduleSyncTutorialStep3Spin();
+  }
+
+  void _scheduleSyncTutorialStep3Spin() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _tutorialStep != 3) return;
+      _syncTutorialStep3Spin();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || _tutorialStep != 3) return;
+        _syncTutorialStep3Spin();
+      });
+    });
+  }
+
+  void _syncTutorialStep3Spin() {
+    final targetCtx = _tutorialStep3SpinKey.currentContext;
+    final overlayCtx = _tutorialStep3OverlayKey.currentContext;
+    if (targetCtx == null || overlayCtx == null) return;
+    final spinBox = targetCtx.findRenderObject() as RenderBox?;
+    final overlayBox = overlayCtx.findRenderObject() as RenderBox?;
+    if (spinBox == null ||
+        overlayBox == null ||
+        !spinBox.hasSize ||
+        !overlayBox.hasSize) {
+      return;
+    }
+    final topLeft = overlayBox.globalToLocal(
+      spinBox.localToGlobal(Offset.zero),
+    );
+    final newRect = Rect.fromLTWH(
+      topLeft.dx,
+      topLeft.dy,
+      spinBox.size.width,
+      spinBox.size.height,
+    );
+    if (_tutorialStep3SpinRect == null ||
+        (_tutorialStep3SpinRect!.left - newRect.left).abs() > 0.5 ||
+        (_tutorialStep3SpinRect!.top - newRect.top).abs() > 0.5 ||
+        (_tutorialStep3SpinRect!.width - newRect.width).abs() > 0.5 ||
+        (_tutorialStep3SpinRect!.height - newRect.height).abs() > 0.5) {
+      setState(() => _tutorialStep3SpinRect = newRect);
+    }
+  }
+
+  void _attachTutorialStep3ScrollSync() {
+    if (_tutorialStep3ScrollAttached) return;
+    _tutorialStep3ScrollAttached = true;
+    _goldVeinScrollController.addListener(_scheduleSyncTutorialStep3Spin);
+  }
+
+  void _detachTutorialStep3ScrollSync() {
+    if (!_tutorialStep3ScrollAttached) return;
+    _tutorialStep3ScrollAttached = false;
+    _goldVeinScrollController.removeListener(_scheduleSyncTutorialStep3Spin);
+  }
+
   void _onBalanceNotifierChanged() {
     if (!mounted) return;
     final v = BalanceService.balanceNotifier.value;
@@ -232,6 +306,9 @@ class _GoldVeinScreenState extends State<GoldVeinScreen>
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _detachTutorialStep3ScrollSync();
+    _goldVeinScrollController.dispose();
     BalanceService.balanceNotifier.removeListener(_onBalanceNotifierChanged);
     _adjustTimer?.cancel();
     _notificationHideTimer?.cancel();
@@ -262,19 +339,31 @@ class _GoldVeinScreenState extends State<GoldVeinScreen>
     unawaited(BalanceService.setLastBet(initialBet));
   }
 
-  static const _testModeAlwaysShowTutorial = false;
-
   Future<void> _loadTutorialState() async {
+    final rawCompleted = await TutorialService.isTutorialsCompletedRaw();
+    final force = TutorialService.forceTutorialForTesting;
+    final tutorialsCompleted = force ? false : rawCompleted;
+
     final prefs = await SharedPreferences.getInstance();
+    // Step 1 = «зашли в Gold Vein с главного» (тот же ключ, что на Home). Его нельзя
+    // форсить в false — иначе _tutorialStep всегда 0 и оверлеи 2/3 никогда не показываются.
     final step1Done = prefs.getBool(_tutorialStep1DoneKey) ?? false;
-    final step2Done = prefs.getBool(_tutorialStep2DoneKey) ?? false;
-    final step3Done = prefs.getBool(_tutorialStep3DoneKey) ?? false;
+    final step2Done =
+        force ? false : (prefs.getBool(_tutorialStep2DoneKey) ?? false);
+    final step3Done =
+        force ? false : (prefs.getBool(_tutorialStep3DoneKey) ?? false);
+    final jackpotGiven = force
+        ? false
+        : (prefs.getBool(_postTutorialJackpotGivenKey) ?? false);
     if (!mounted) return;
     setState(() {
-      if (_testModeAlwaysShowTutorial) {
-        _tutorialStep = 2;
-      } else if (!step1Done) {
+      _goldVeinTutorialCompleted = tutorialsCompleted;
+      _postTutorialJackpotGiven = jackpotGiven;
+      if (tutorialsCompleted) {
         _tutorialStep = 0;
+      } else if (!step1Done) {
+        // В тестовом режиме можно открыть Gold Vein без главного экрана — всё равно показать шаг 2.
+        _tutorialStep = force ? 2 : 0;
       } else if (!step2Done) {
         _tutorialStep = 2;
       } else if (!step3Done) {
@@ -284,20 +373,40 @@ class _GoldVeinScreenState extends State<GoldVeinScreen>
       }
       _tutorialStateLoaded = true;
     });
+    if (mounted && _tutorialStep == 3) {
+      _attachTutorialStep3ScrollSync();
+      _scheduleSyncTutorialStep3Spin();
+    }
   }
 
   Future<void> _completeTutorialStepTwo() async {
     final prefs = await SharedPreferences.getInstance();
+    // Если зашли в обучение без тапа по карточке на главном — зафиксировать шаг 1,
+    // иначе при следующей загрузке снова попадём только на шаг 2.
+    if (!(prefs.getBool(_tutorialStep1DoneKey) ?? false)) {
+      await prefs.setBool(_tutorialStep1DoneKey, true);
+    }
     await prefs.setBool(_tutorialStep2DoneKey, true);
     if (!mounted) return;
-    setState(() => _tutorialStep = 3);
+    setState(() {
+      _tutorialStep = 3;
+      _tutorialStep3SpinRect = null;
+    });
+    _attachTutorialStep3ScrollSync();
+    _scheduleSyncTutorialStep3Spin();
   }
 
   Future<void> _completeTutorialStepThree() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_tutorialStep3DoneKey, true);
+    await TutorialService.setTutorialsCompleted();
     if (!mounted) return;
-    setState(() => _tutorialStep = 0);
+    _detachTutorialStep3ScrollSync();
+    setState(() {
+      _tutorialStep = 0;
+      _goldVeinTutorialCompleted = true;
+      _tutorialStep3SpinRect = null;
+    });
   }
 
   void _animateBalanceChange({int durationMs = 520}) {
@@ -361,6 +470,7 @@ class _GoldVeinScreenState extends State<GoldVeinScreen>
     Color? color,
     Paint? foreground,
     double size = 18.58,
+    double? letterSpacing,
   }) {
     return TextStyle(
       fontFamily: 'Gotham',
@@ -370,7 +480,7 @@ class _GoldVeinScreenState extends State<GoldVeinScreen>
       fontWeight: FontWeight.w900,
       fontStyle: FontStyle.normal,
       height: 1.6,
-      letterSpacing: -0.02 * size,
+      letterSpacing: letterSpacing ?? -0.02 * size,
       shadows: [
         const Shadow(
           color: _balanceStroke,
@@ -418,17 +528,11 @@ class _GoldVeinScreenState extends State<GoldVeinScreen>
     _winCountController.duration = Duration(milliseconds: countMs);
     _winCountController.forward(from: 0);
 
-    if (type != _WinBannerType.jackpots) {
-      final hideMs = switch (type) {
-        _WinBannerType.win => 900,
-        _WinBannerType.bigWin => 1200,
-        _WinBannerType.jackpots => 0,
-      };
-      _notificationHideTimer = Timer(Duration(milliseconds: hideMs), () {
-        if (!mounted) return;
-        _dismissWinOverlay();
-      });
-    }
+    const hideMs = 2000;
+    _notificationHideTimer = Timer(const Duration(milliseconds: hideMs), () {
+      if (!mounted) return;
+      _dismissWinOverlay();
+    });
   }
 
   void _dismissWinOverlay() {
@@ -449,6 +553,10 @@ class _GoldVeinScreenState extends State<GoldVeinScreen>
       return;
     }
 
+    unawaited(AudioService.instance.playButtonClick());
+    // Звук запускаем асинхронно: анимация не ждёт его завершения.
+    unawaited(AudioService.instance.playRouletteSpin(3800));
+
     final betToUse = _bet;
     final afterBetBalance = _balance - betToUse;
     setState(() {
@@ -466,8 +574,6 @@ class _GoldVeinScreenState extends State<GoldVeinScreen>
     _spinsSinceEntry++;
     final target = _generateSpinResult();
 
-    unawaited(AudioService.instance.playRouletteSpin(3800));
-
     await Future.wait([
       _spinReel(0, target, _spinDurationForReel(0)),
       _spinReel(1, target, _spinDurationForReel(1)),
@@ -476,11 +582,23 @@ class _GoldVeinScreenState extends State<GoldVeinScreen>
 
     if (!mounted) return;
     final result = _calculateWin(target, betToUse);
-    final win = result.$1;
+    var win = result.$1;
     final totalMultiplier = result.$2;
     final winCells = result.$3;
-    final winningLines = result.$4;
-    final isJackpot = result.$5;
+    var winningLines = result.$4;
+    var isJackpot = result.$5;
+    final isPostTutorialWin =
+        _spinsSinceEntry == 1 &&
+        win > 0 &&
+        _goldVeinTutorialCompleted &&
+        !_postTutorialJackpotGiven;
+    if (isPostTutorialWin) {
+      win = _postTutorialJackpot;
+      isJackpot = true;
+      _postTutorialJackpotGiven = true;
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_postTutorialJackpotGivenKey, true);
+    }
 
     setState(() {
       _highlightedCells
@@ -548,6 +666,7 @@ class _GoldVeinScreenState extends State<GoldVeinScreen>
     int settleStepMs,
   })
   _spinProfileForReel(int reel) {
+    // Same start speed (minStepMs) for all; different deceleration (maxStepMs)
     switch (reel) {
       case 0:
         return (
@@ -559,7 +678,7 @@ class _GoldVeinScreenState extends State<GoldVeinScreen>
         );
       case 1:
         return (
-          minStepMs: 24,
+          minStepMs: 18,
           maxStepMs: 128,
           curve: Curves.easeOutQuart,
           settleBaseMs: 84,
@@ -567,7 +686,7 @@ class _GoldVeinScreenState extends State<GoldVeinScreen>
         );
       case 2:
         return (
-          minStepMs: 20,
+          minStepMs: 18,
           maxStepMs: 104,
           curve: Curves.easeOutQuad,
           settleBaseMs: 68,
@@ -575,7 +694,7 @@ class _GoldVeinScreenState extends State<GoldVeinScreen>
         );
       default:
         return (
-          minStepMs: 20,
+          minStepMs: 18,
           maxStepMs: 100,
           curve: Curves.easeOutCubic,
           settleBaseMs: 64,
@@ -643,18 +762,39 @@ class _GoldVeinScreenState extends State<GoldVeinScreen>
   List<List<int>> _generateSpinResult() {
     // During tutorial: no wins.
     final inTutorial = _tutorialStep == 2 || _tutorialStep == 3;
-    // Wins only after first 5 spins, and only every 5th spin (5, 10, 15, ...).
-    final isWinningSpin =
-        !inTutorial &&
-        _spinsSinceEntry >= _winSpinInterval &&
-        _spinsSinceEntry % _winSpinInterval == 0;
+    final isFirstSpinAfterTutorial =
+        _spinsSinceEntry == 1 &&
+        _goldVeinTutorialCompleted &&
+        !_postTutorialJackpotGiven;
+
+    // Guaranteed 1 win per 4 spins. At cycle start, pick which spin (0..3) wins.
+    if (!inTutorial && _spinsInCycle == 0) {
+      _winningSpinInCycle = _rng.nextInt(_winChanceOutOf);
+    }
+    final isWinningSpin = !inTutorial &&
+        (isFirstSpinAfterTutorial || _spinsInCycle == _winningSpinInCycle);
 
     if (!isWinningSpin) {
+      if (!inTutorial) _spinsInCycle = (_spinsInCycle + 1) % _winChanceOutOf;
       return _generateLosingGrid();
+    }
+
+    // First spin after tutorial: fixed jackpot with 3 diamonds (middle line) + 10000 payout.
+    if (isFirstSpinAfterTutorial) {
+      _spinsInCycle = (_spinsInCycle + 1) % _winChanceOutOf;
+      final grid = List.generate(
+        _rows,
+        (_) => List.generate(_cols, (_) => _weightedRandomSymbol()),
+      );
+      for (var c = 0; c < _cols; c++) {
+        grid[2][c] = _diamondSymbolIndex;
+      }
+      return grid;
     }
 
     // On winning spins: jackpot 1 in 1000, or guaranteed line win.
     if (_rng.nextInt(_jackpotOdds) == 0) {
+      _spinsInCycle = (_spinsInCycle + 1) % _winChanceOutOf;
       final jackpotSymbol = _rng.nextInt(_symbols.length);
       return List.generate(
         _rows,
@@ -662,12 +802,14 @@ class _GoldVeinScreenState extends State<GoldVeinScreen>
       );
     }
 
+    _spinsInCycle = (_spinsInCycle + 1) % _winChanceOutOf;
     final grid = List.generate(
       _rows,
       (_) => List.generate(_cols, (_) => _weightedRandomSymbol()),
     );
     final line = _paylines[_rng.nextInt(_paylines.length)];
-    final symbol = _weightedRandomSymbol();
+    // Random symbol for winning line (uniform), so multiplier is random.
+    final symbol = _rng.nextInt(_symbols.length);
     for (final p in line) {
       grid[p.r][p.c] = symbol;
     }
@@ -725,7 +867,7 @@ class _GoldVeinScreenState extends State<GoldVeinScreen>
       return (win, _jackpotMultiplier, allCells, 5, true);
     }
 
-    // Regular paylines: each line pays independently (fruit-slot style).
+    // Regular paylines: best line wins (bet × max multiplier), not sum of lines.
     var totalMultiplier = 0.0;
     final hitCells = <String>{};
     var winningLines = 0;
@@ -735,7 +877,8 @@ class _GoldVeinScreenState extends State<GoldVeinScreen>
       final s2 = grid[line[2].r][line[2].c];
       if (symbol == s1 && symbol == s2) {
         winningLines++;
-        totalMultiplier += _symbolMultipliers[symbol];
+        final lineMult = _symbolMultipliers[symbol];
+        if (lineMult > totalMultiplier) totalMultiplier = lineMult;
         for (final p in line) {
           hitCells.add('${p.r}-${p.c}');
         }
@@ -812,13 +955,15 @@ class _GoldVeinScreenState extends State<GoldVeinScreen>
     );
   }
 
-  Widget _buildOutlinedValue(String value, {double size = 18.58}) {
+  Widget _buildOutlinedValue(String value, {double size = 18.58, double? letterSpacing}) {
     return Stack(
       children: [
         Text(
           value,
+          textAlign: TextAlign.center,
           style: _valueTextStyle(
             size: size,
+            letterSpacing: letterSpacing,
             foreground: Paint()
               ..style = PaintingStyle.stroke
               ..strokeWidth = size * 0.046
@@ -827,7 +972,8 @@ class _GoldVeinScreenState extends State<GoldVeinScreen>
         ),
         Text(
           value,
-          style: _valueTextStyle(size: size, color: _balanceFill),
+          textAlign: TextAlign.center,
+          style: _valueTextStyle(size: size, letterSpacing: letterSpacing, color: _balanceFill),
         ),
       ],
     );
@@ -896,7 +1042,6 @@ class _GoldVeinScreenState extends State<GoldVeinScreen>
     final currentSymbolKey = ValueKey('$symbol-$row-$col-${_reelTicks[col]}');
     final isHighlighted = _highlightedCells.contains('$row-$col');
     final bounce = _reelBounceControllers[col];
-    final symbolOffset = _symbolPositionOffset(row, col);
     final blurSigma = _reelSpinBlurSigma(col);
     return AnimatedBuilder(
       animation: bounce,
@@ -937,7 +1082,7 @@ class _GoldVeinScreenState extends State<GoldVeinScreen>
                   },
                   child: Transform.translate(
                     key: currentSymbolKey,
-                    offset: symbolOffset,
+                    offset: Offset.zero,
                     child: ClipRect(
                       child: ImageFiltered(
                         imageFilter: ui.ImageFilter.blur(
@@ -963,7 +1108,7 @@ class _GoldVeinScreenState extends State<GoldVeinScreen>
                 if (isHighlighted)
                   IgnorePointer(
                     child: Transform.translate(
-                      offset: symbolOffset,
+                      offset: Offset.zero,
                       child: SizedBox(
                         width: cellW,
                         height: cellH,
@@ -1003,97 +1148,72 @@ class _GoldVeinScreenState extends State<GoldVeinScreen>
     return (0.12 + intensity * 3.1).clamp(0.0, 3.4);
   }
 
-  Offset _symbolPositionOffset(int row, int col) {
-    // Base per-column alignment.
-    late final Offset base;
-    if (col == 0) {
-      base = const Offset(9, 5); // Left column.
-    } else if (col == 1) {
-      base = const Offset(4, 5); // Middle column.
-    } else {
-      base = const Offset(-2, 5); // Right column.
-    }
+  /// Slot machine content at design size (428x479). Used inside FittedBox for
+  /// uniform scaling across resolutions.
+  Widget _buildSlotMachineAtDesignSize() {
+    const cellW = GoldVeinSlotZones.cellWidth;
+    const cellH = GoldVeinSlotZones.cellHeight;
+    const symbolW = _slotSymbolWidth;
+    const symbolH = _slotSymbolHeight;
 
-    // Row compensation:
-    // - top row -> push down by 10px
-    // - bottom row -> pull up by 4px
-    if (row == 0) return base + const Offset(0, 10);
-    if (row == _rows - 1) return base + const Offset(0, -4);
-    return base;
+    return Stack(
+      clipBehavior: Clip.hardEdge,
+      children: [
+        Image.asset(
+          'assets/images/gold_vein/slots_back.png',
+          width: GoldVeinSlotZones.viewWidth,
+          height: GoldVeinSlotZones.viewHeight,
+          fit: BoxFit.contain,
+        ),
+        ...List.generate(_rows, (r) {
+          return List.generate(_cols, (c) {
+            final centerX = GoldVeinSlotZones.colCenters[c] +
+                GoldVeinSlotZones.symbolOffsetX +
+                GoldVeinSlotZones.colOffsetX[c] +
+                GoldVeinSlotZones.columnsShiftRight;
+            final centerY = GoldVeinSlotZones.rowCenters[r] +
+                GoldVeinSlotZones.symbolOffsetY;
+            final left = centerX - cellW / 2;
+            final top = centerY - cellH / 2;
+            return Positioned(
+              left: left,
+              top: top,
+              child: SizedBox(
+                width: cellW,
+                height: cellH,
+                child: _buildSymbolCell(r, c, cellW, cellH, symbolW, symbolH),
+              ),
+            );
+          });
+        }).expand((e) => e),
+      ],
+    );
   }
 
-  Widget _buildSlotMachine(double scale) {
-    final boardW = _slotBoardWidth * scale;
-    final boardH = _slotBoardHeight * scale;
-    final gridTop = (_slotGridTop + _slotGridOffsetY) * scale;
-    final colGap = _slotColGap * scale;
-    final rowGap = _slotRowGap * scale;
-    final cellW = _slotCellWidth * scale;
-    final cellH = _slotCellHeight * scale;
-    final gridW = _cols * cellW + (_cols - 1) * colGap;
-    final gridH = _rows * cellH + (_rows - 1) * rowGap;
-    final gridLeft = (boardW - gridW) / 2 + _slotGridOffsetX * scale;
-    final symbolW = _slotSymbolWidth * scale;
-    final symbolH = _slotSymbolHeight * scale;
-
+  Widget _buildSlotMachine(double scale, double aspectRatio) {
     return SizedBox(
-      width: boardW,
-      height: boardH,
-      child: Stack(
-        clipBehavior: Clip.hardEdge,
-        children: [
-          Image.asset(
-            'assets/images/gold_vein/slots_back.png',
-            width: boardW,
-            height: boardH,
-            fit: BoxFit.fill,
-          ),
-          Positioned(
-            top: gridTop,
-            left: gridLeft,
-            child: SizedBox(
-              width: gridW,
-              height: gridH,
-              child: Column(
-                children: List.generate(_rows, (r) {
-                  return Padding(
-                    padding: EdgeInsets.only(
-                      bottom: r == _rows - 1 ? 0 : rowGap,
-                    ),
-                    child: Row(
-                      children: List.generate(_cols, (c) {
-                        return Padding(
-                          padding: EdgeInsets.only(
-                            right: c == _cols - 1 ? 0 : colGap,
-                          ),
-                          child: _buildSymbolCell(
-                            r,
-                            c,
-                            cellW,
-                            cellH,
-                            symbolW,
-                            symbolH,
-                          ),
-                        );
-                      }),
-                    ),
-                  );
-                }),
-              ),
-            ),
-          ),
-        ],
+      width: _slotBoardWidth * scale,
+      height: _slotBoardHeight * scale,
+      child: FittedBox(
+        fit: BoxFit.contain,
+        alignment: Alignment.center,
+        child: SizedBox(
+          width: GoldVeinSlotZones.viewWidth,
+          height: GoldVeinSlotZones.viewHeight,
+          child: _buildSlotMachineAtDesignSize(),
+        ),
       ),
     );
   }
 
-  Widget _buildCenterMessage(double scale) {
+  Widget _buildCenterMessage(BuildContext context, double scale) {
     if (!_showCenterMessage && !_isWinOverlayVisible) {
       return const SizedBox.shrink();
     }
 
     if (_isWinOverlayVisible) {
       final boardWidth = _slotBoardWidth * scale;
+      final screenWidth = MediaQuery.sizeOf(context).width;
       final smallTitle = 33.8 * scale;
       final jackpotNumber = 51.52 * scale;
       final amountText = _formatWinAmount(_overlayAnimatedWin);
@@ -1140,6 +1260,45 @@ class _GoldVeinScreenState extends State<GoldVeinScreen>
         );
       }
 
+      final jackpotColumn = Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(
+            width: boardWidth,
+            child: Center(
+              child: outlinedText('JACKPOTS', smallTitle),
+            ),
+          ),
+          SizedBox(height: 4 * scale),
+          SizedBox(
+            width: screenWidth,
+            child: ClipRect(
+              child: BackdropFilter(
+                filter: ui.ImageFilter.blur(sigmaX: 4, sigmaY: 4),
+                child: Container(
+                  width: screenWidth,
+                  height: 88 * scale,
+                  color: const Color(0x80F3FF45),
+                  alignment: Alignment.center,
+                  child: outlinedText(
+                    amountText,
+                    jackpotNumber,
+                    stroke: 2.41 * scale,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          SizedBox(height: 4 * scale),
+          SizedBox(
+            width: boardWidth,
+            child: Center(
+              child: outlinedText('JACKPOTS', smallTitle),
+            ),
+          ),
+        ],
+      );
+
       return FadeTransition(
         opacity: CurvedAnimation(
           parent: _notificationController,
@@ -1152,48 +1311,29 @@ class _GoldVeinScreenState extends State<GoldVeinScreen>
               curve: Curves.easeOutCubic,
             ),
           ),
-          child: SizedBox(
-            width: boardWidth,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (_winBannerType == _WinBannerType.win) ...[
-                  outlinedText('WIN', smallTitle),
-                  Transform.translate(
-                    offset: Offset(0, -6 * scale),
-                    child: outlinedText(amountText, smallTitle),
-                  ),
-                ] else if (_winBannerType == _WinBannerType.bigWin) ...[
-                  outlinedText(amountText, smallTitle),
-                  Transform.translate(
-                    offset: Offset(0, -6 * scale),
-                    child: outlinedText('BIG WIN!', smallTitle),
-                  ),
-                ] else ...[
-                  outlinedText('JACKPOTS', smallTitle),
-                  SizedBox(height: 4 * scale),
-                  ClipRect(
-                    child: BackdropFilter(
-                      filter: ui.ImageFilter.blur(sigmaX: 4, sigmaY: 4),
-                      child: Container(
-                        width: boardWidth,
-                        height: 88 * scale,
-                        color: const Color(0x80F3FF45),
-                        alignment: Alignment.center,
-                        child: outlinedText(
-                          amountText,
-                          jackpotNumber,
-                          stroke: 2.41 * scale,
+          child: _winBannerType == _WinBannerType.jackpots
+              ? jackpotColumn
+              : SizedBox(
+                  width: boardWidth,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (_winBannerType == _WinBannerType.win) ...[
+                        outlinedText('WIN', smallTitle),
+                        Transform.translate(
+                          offset: Offset(0, -6 * scale),
+                          child: outlinedText(amountText, smallTitle),
                         ),
-                      ),
-                    ),
+                      ] else ...[
+                        outlinedText(amountText, smallTitle),
+                        Transform.translate(
+                          offset: Offset(0, -6 * scale),
+                          child: outlinedText('BIG WIN!', smallTitle),
+                        ),
+                      ],
+                    ],
                   ),
-                  SizedBox(height: 4 * scale),
-                  outlinedText('JACKPOTS', smallTitle),
-                ],
-              ],
-            ),
-          ),
+                ),
         ),
       );
     }
@@ -1222,13 +1362,15 @@ class _GoldVeinScreenState extends State<GoldVeinScreen>
             borderRadius: BorderRadius.circular(14 * scale),
             border: Border.all(color: Colors.white70, width: 1.2),
           ),
-          child: Text(
-            _centerMessage,
-            textAlign: TextAlign.center,
-            style: GoogleFonts.montserrat(
+          child: Center(
+            child: Text(
+              _centerMessage,
+              textAlign: TextAlign.center,
+              style: GoogleFonts.montserrat(
               color: Colors.white,
               fontWeight: FontWeight.w900,
               fontSize: 15 * scale,
+            ),
             ),
           ),
         ),
@@ -1241,7 +1383,7 @@ class _GoldVeinScreenState extends State<GoldVeinScreen>
       animation: _tutorialTapController,
       builder: (context, child) {
         final t = Curves.easeInOut.transform(_tutorialTapController.value);
-        final hintScale = 0.9 + (0.2 * t);
+        final hintScale = 0.9 + (0.1 * t);
         return Transform.rotate(
           angle: -0.08,
           child: Transform.scale(
@@ -1334,43 +1476,56 @@ class _GoldVeinScreenState extends State<GoldVeinScreen>
                       ),
                     ),
                   ),
-                  Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        'YOUR BET:',
-                        style: GoogleFonts.montserrat(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w900,
-                          fontSize: 10.5 * scale,
+                  Center(
+                    child: Transform.translate(
+                      offset: const Offset(0, 2),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'YOUR BET:',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontFamily: 'Gotham',
+                            color: Colors.white,
+                            fontWeight: FontWeight.w900,
+                            fontSize: 11.3 * scale,
+                            height: 1.4,
+                            letterSpacing: -0.02 * 11.3 * scale,
+                          ),
                         ),
-                      ),
-                      SizedBox(height: 2 * scale),
-                      Transform.translate(
-                        offset: Offset(0, -6 * scale),
-                        child: Center(
+                        SizedBox(height: 2 * scale),
+                        Transform.translate(
+                          offset: const Offset(0, -5),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
+                            mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              SizedBox(
-                                width: 24 * scale,
-                                height: 24 * scale,
-                                child: Image.asset(
-                                  'assets/images/shop/coin_icon.png',
-                                  fit: BoxFit.contain,
+                              Transform.translate(
+                                offset: const Offset(0, 2),
+                                child: SizedBox(
+                                  width: 22 * scale,
+                                  height: 22 * scale,
+                                  child: Image.asset(
+                                    'assets/images/shop/coin_icon.png',
+                                    fit: BoxFit.contain,
+                                  ),
                                 ),
                               ),
                               SizedBox(width: 6 * scale),
                               _buildOutlinedValue(
                                 _formatAmount(_bet),
-                                size: 19 * scale,
+                                size: (_bet > 999999 ? 19 : 20) * scale,
+                                letterSpacing: -0.04 * (_bet > 999999 ? 19 : 20) * scale,
                               ),
                             ],
                           ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
+                ),
                 ],
               ),
             ),
@@ -1459,9 +1614,14 @@ class _GoldVeinScreenState extends State<GoldVeinScreen>
             ),
           ),
           Positioned(
-            left: 186 * scale,
+            left: 186 * scale - 20,
             bottom: -2 * scale,
-            child: IgnorePointer(child: _buildTutorialTapHint(scale)),
+            child: IgnorePointer(
+              child: Transform.scale(
+                scale: 0.85,
+                child: _buildTutorialTapHint(scale),
+              ),
+            ),
           ),
         ],
       ),
@@ -1477,9 +1637,23 @@ class _GoldVeinScreenState extends State<GoldVeinScreen>
     await _startSpin();
   }
 
-  Widget _buildTutorialStepThreeOverlay(double scale) {
+  Widget _buildTutorialStepThreeOverlay(
+    double scale,
+    double maxWidth,
+    double maxHeight,
+  ) {
+    final bubbleW = _tutorialBubbleStep3Width * scale;
+    final bubbleH = _tutorialBubbleHeight * scale;
+    final trollMaxW =
+        (maxWidth * 0.92).clamp(200.0, 400.0) * _tutorialStep3TrollScale;
+    final trollMaxH =
+        (maxHeight * 0.34).clamp(160.0, 360.0) * _tutorialStep3TrollScale;
+    final r = _tutorialStep3SpinRect;
+
     return Positioned.fill(
       child: Stack(
+        key: _tutorialStep3OverlayKey,
+        clipBehavior: Clip.none,
         children: [
           const Positioned.fill(
             child: AbsorbPointer(
@@ -1487,66 +1661,47 @@ class _GoldVeinScreenState extends State<GoldVeinScreen>
               child: ColoredBox(color: _tutorialOverlayColor),
             ),
           ),
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: Center(
-              child: Transform.translate(
-                offset: Offset(-50 * scale, 40 * scale),
-                child: IgnorePointer(
-                  child: SizedBox(
-                    width: (_tutorialTrollSize + 60) * scale,
-                    height: (_tutorialTrollSize + 60) * scale,
-                    child: Image.asset(
-                      'assets/images/tutorial/troll_education3.png',
-                      fit: BoxFit.contain,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 116 * scale,
-            child: Center(
-              child: Transform.translate(
-                offset: Offset(70 * scale, 0),
-                child: IgnorePointer(
-                  child: SizedBox(
-                    width: _tutorialBubbleStep3Width * scale,
-                    height: _tutorialBubbleHeight * scale,
-                    child: Image.asset(
-                      'assets/images/tutorial/info2.png',
-                      fit: BoxFit.fill,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-          Positioned(
-            right: 28 * scale,
-            bottom: 32 * scale,
-            child: AnimatedBuilder(
-              animation: _tutorialTapController,
-              builder: (context, child) {
-                final t = Curves.easeInOut.transform(
-                  _tutorialTapController.value,
-                );
-                final pulseScale = 0.94 + (0.12 * t);
-                return Transform.scale(
-                  scale: pulseScale,
-                  child: PressableButton(
-                    onTap: _onSpinTap,
-                    child: SizedBox(
-                      width: 103 * scale,
-                      height: 58 * scale,
-                      child: Image.asset(
-                        'assets/images/gold_vein/spin_btn.png',
-                        fit: BoxFit.fill,
+          Align(
+            alignment: Alignment.bottomCenter,
+            child: Builder(
+              builder: (ctx) {
+                return MediaQuery.removePadding(
+                  context: ctx,
+                  removeBottom: true,
+                  child: SafeArea(
+                    top: false,
+                    bottom: false,
+                    left: true,
+                    right: true,
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: max(8.0, 12 * scale),
+                      ),
+                      child: IgnorePointer(
+                        child: Transform.translate(
+                          offset: const Offset(-48, 30),
+                          child: ConstrainedBox(
+                            constraints: BoxConstraints(
+                              maxWidth: trollMaxW,
+                              maxHeight: trollMaxH,
+                            ),
+                            child: FittedBox(
+                              fit: BoxFit.contain,
+                              alignment: Alignment.bottomCenter,
+                              child: SizedBox(
+                                width: (_tutorialTrollSize + 60) *
+                                    _tutorialStep3TrollScale,
+                                height: (_tutorialTrollSize + 60) *
+                                    _tutorialStep3TrollScale,
+                                child: Image.asset(
+                                  'assets/images/tutorial/troll_education3.png',
+                                  fit: BoxFit.contain,
+                                  alignment: Alignment.bottomCenter,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
                       ),
                     ),
                   ),
@@ -1554,6 +1709,82 @@ class _GoldVeinScreenState extends State<GoldVeinScreen>
               },
             ),
           ),
+          Positioned(
+            left: r != null
+                ? (r.center.dx - bubbleW / 2).clamp(
+                    8.0,
+                    maxWidth - bubbleW - 8,
+                  )
+                : ((maxWidth - bubbleW) / 2 + 30 * scale).clamp(
+                    8.0,
+                    maxWidth - bubbleW - 8,
+                  ),
+            top: r != null
+                ? max(8.0, r.top - bubbleH - 12 * scale)
+                : null,
+            bottom: r == null ? 195 * scale : null,
+            child: IgnorePointer(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: SizedBox(
+                  width: bubbleW,
+                  height: bubbleH,
+                  child: Image.asset(
+                    'assets/images/tutorial/info2.png',
+                    fit: BoxFit.fill,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          if (r != null)
+            Positioned(
+              left: r.left - 4,
+              top: r.top - 4,
+              width: r.width + 8,
+              height: r.height + 8,
+              child: AnimatedBuilder(
+                animation: _tutorialTapController,
+                builder: (context, child) {
+                  final t = Curves.easeInOut.transform(
+                    _tutorialTapController.value,
+                  );
+                  final pulseScale = 0.94 + (0.12 * t);
+                  final radius = (11 * scale).clamp(9.0, 16.0);
+                  return Transform.scale(
+                    scale: pulseScale,
+                    alignment: Alignment.center,
+                    child: PressableButton(
+                      onTap: _onSpinTap,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(radius),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xE0FFF145)
+                                  .withValues(alpha: 0.82),
+                              blurRadius: 12 + 8 * t,
+                              spreadRadius: 2 + t,
+                            ),
+                          ],
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(radius),
+                          child: SizedBox(
+                            width: r.width,
+                            height: r.height,
+                            child: Image.asset(
+                              'assets/images/gold_vein/spin_btn.png',
+                              fit: BoxFit.fill,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
         ],
       ),
     );
@@ -1562,37 +1793,47 @@ class _GoldVeinScreenState extends State<GoldVeinScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFF1A1510),
       body: LayoutBuilder(
         builder: (context, constraints) {
           final scale = min(
             constraints.maxWidth / 390,
             constraints.maxHeight / 844,
           ).clamp(0.82, 1.3);
+          final aspectRatio = constraints.maxWidth / constraints.maxHeight;
           return Stack(
             children: [
               Positioned.fill(
                 child: Image.asset(
                   'assets/images/gold_vein/bg3.png',
                   fit: BoxFit.cover,
+                  alignment: Alignment.bottomCenter,
                 ),
               ),
               SafeArea(
                 child: SingleChildScrollView(
+                  controller: _goldVeinScrollController,
                   physics: const NeverScrollableScrollPhysics(),
                   padding: EdgeInsets.only(bottom: 16 * scale),
                   child: Column(
                     children: [
                       SizedBox(height: 200 * scale),
-                      Transform.translate(
-                        offset: Offset(0, -50 * scale),
-                        child: Stack(
-                          alignment: Alignment.center,
-                          children: [
-                            _buildSlotMachine(scale),
-                            if (!(_isWinOverlayVisible &&
-                                _winBannerType == _WinBannerType.jackpots))
-                              _buildCenterMessage(scale),
-                          ],
+                      SizedBox(
+                        width: double.infinity,
+                        child: Center(
+                          child: Transform.translate(
+                            offset: Offset(0, -50 * scale),
+                            child: Stack(
+                              alignment: Alignment.center,
+                              children: [
+                                _buildSlotMachine(scale, aspectRatio),
+                                if (!(_isWinOverlayVisible &&
+                                    _winBannerType ==
+                                        _WinBannerType.jackpots))
+                                  _buildCenterMessage(context, scale),
+                              ],
+                            ),
+                          ),
                         ),
                       ),
                       SizedBox(height: 2 * scale),
@@ -1614,6 +1855,7 @@ class _GoldVeinScreenState extends State<GoldVeinScreen>
                                 top: 14 * scale,
                                 child: Text(
                                   'YOU WIN:',
+                                  textAlign: TextAlign.center,
                                   style: GoogleFonts.montserrat(
                                     color: Colors.white,
                                     fontWeight: FontWeight.w900,
@@ -1622,17 +1864,20 @@ class _GoldVeinScreenState extends State<GoldVeinScreen>
                                 ),
                               ),
                               Positioned(
-                                bottom: 26 * scale,
+                                bottom: 30 * scale,
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   crossAxisAlignment: CrossAxisAlignment.center,
                                   children: [
-                                    SizedBox(
-                                      width: 24 * scale,
-                                      height: 24 * scale,
-                                      child: Image.asset(
-                                        'assets/images/shop/coin_icon.png',
-                                        fit: BoxFit.contain,
+                                    Transform.translate(
+                                      offset: const Offset(0, 2),
+                                      child: SizedBox(
+                                        width: 24 * scale,
+                                        height: 24 * scale,
+                                        child: Image.asset(
+                                          'assets/images/shop/coin_icon.png',
+                                          fit: BoxFit.contain,
+                                        ),
                                       ),
                                     ),
                                     SizedBox(width: 6 * scale),
@@ -1741,46 +1986,57 @@ class _GoldVeinScreenState extends State<GoldVeinScreen>
                                                       ),
                                                     ),
                                                   ),
-                                                  Column(
-                                                    mainAxisAlignment:
-                                                        MainAxisAlignment
-                                                            .center,
-                                                    children: [
-                                                      Text(
-                                                        'YOUR BET:',
-                                                        style:
-                                                            GoogleFonts.montserrat(
-                                                              color:
-                                                                  Colors.white,
-                                                              fontWeight:
-                                                                  FontWeight
-                                                                      .w900,
-                                                              fontSize:
-                                                                  10.5 * scale,
-                                                            ),
-                                                      ),
-                                                      SizedBox(
-                                                        height: 2 * scale,
-                                                      ),
-                                                      Transform.translate(
-                                                        offset: Offset(
-                                                            0, -6 * scale),
-                                                        child: Center(
+                                                  Center(
+                                                    child: Transform.translate(
+                                                      offset: const Offset(0, 2),
+                                                      child: Column(
+                                                        mainAxisAlignment:
+                                                            MainAxisAlignment
+                                                                .center,
+                                                        mainAxisSize:
+                                                            MainAxisSize.min,
+                                                        children: [
+                                                          Text(
+                                                            'YOUR BET:',
+                                                          textAlign:
+                                                              TextAlign.center,
+                                                          style: TextStyle(
+                                                            fontFamily: 'Gotham',
+                                                            color: Colors.white,
+                                                            fontWeight:
+                                                                FontWeight.w900,
+                                                            fontSize:
+                                                                11.3 * scale,
+                                                            height: 1.4,
+                                                            letterSpacing:
+                                                                -0.02 * 11.3 * scale,
+                                                          ),
+                                                        ),
+                                                        SizedBox(
+                                                          height: 2 * scale,
+                                                        ),
+                                                        Transform.translate(
+                                                          offset: const Offset(0, -5),
                                                           child: Row(
                                                             mainAxisSize:
-                                                                MainAxisSize
-                                                                    .min,
+                                                                MainAxisSize.min,
+                                                            mainAxisAlignment:
+                                                                MainAxisAlignment
+                                                                    .center,
                                                             children: [
-                                                              SizedBox(
-                                                                width: 24 *
-                                                                    scale,
-                                                                height: 24 *
-                                                                    scale,
-                                                                child: Image
-                                                                    .asset(
-                                                                  'assets/images/shop/coin_icon.png',
-                                                                  fit: BoxFit
-                                                                      .contain,
+                                                              Transform.translate(
+                                                                offset: const Offset(0, 2),
+                                                                child: SizedBox(
+                                                                  width: 22 *
+                                                                      scale,
+                                                                  height: 22 *
+                                                                      scale,
+                                                                  child: Image
+                                                                      .asset(
+                                                                    'assets/images/shop/coin_icon.png',
+                                                                    fit: BoxFit
+                                                                        .contain,
+                                                                  ),
                                                                 ),
                                                               ),
                                                               SizedBox(
@@ -1790,15 +2046,18 @@ class _GoldVeinScreenState extends State<GoldVeinScreen>
                                                               _buildOutlinedValue(
                                                                 _formatAmount(
                                                                     _bet),
-                                                                size: 19 *
+                                                                size: (_bet > 999999 ? 19 : 20) *
                                                                     scale,
+                                                                letterSpacing:
+                                                                    -0.04 * (_bet > 999999 ? 19 : 20) * scale,
                                                               ),
                                                             ],
                                                           ),
                                                         ),
-                                                      ),
-                                                    ],
+                                                      ],
+                                                    ),
                                                   ),
+                                                ),
                                                 ],
                                               ),
                                             ),
@@ -1822,63 +2081,92 @@ class _GoldVeinScreenState extends State<GoldVeinScreen>
                                       ),
                                     ),
                               SizedBox(width: 44 * scale),
-                              (_tutorialStateLoaded && _tutorialStep == 3)
-                                  ? SizedBox(
-                                      width: 103 * scale,
-                                      height: 93 * scale,
-                                    )
-                                  : Transform.translate(
-                                      offset: Offset(0, 14 * scale),
-                                      child: Column(
-                                        children: [
-                                          Transform.translate(
-                                            offset: Offset(0, 5 * scale),
-                                            child: PressableButton(
-                                              onTap: _toggleAutoSpin,
-                                              child: SizedBox(
-                                                width: 69 * scale,
-                                                height: 27 * scale,
-                                                child: Opacity(
-                                                  opacity: _autoSpin ? 1 : 0.75,
-                                                  child: Image.asset(
-                                                    _autoSpin
-                                                        ? 'assets/images/gold_vein/stop_btn.png'
-                                                        : 'assets/images/gold_vein/auto_btn.png',
-                                                    fit: BoxFit.fill,
-                                                  ),
-                                                ),
+                              Transform.translate(
+                                offset: Offset(0, 14 * scale),
+                                child: Column(
+                                  children: [
+                                    Transform.translate(
+                                      offset: Offset(0, 5 * scale),
+                                      child: IgnorePointer(
+                                        ignoring: _tutorialStateLoaded &&
+                                            _tutorialStep == 3,
+                                        child: PressableButton(
+                                          onTap: _toggleAutoSpin,
+                                          child: SizedBox(
+                                            width: 69 * scale,
+                                            height: 27 * scale,
+                                            child: Opacity(
+                                              opacity: _autoSpin ? 1 : 0.75,
+                                              child: Image.asset(
+                                                _autoSpin
+                                                    ? 'assets/images/gold_vein/stop_btn.png'
+                                                    : 'assets/images/gold_vein/auto_btn.png',
+                                                fit: BoxFit.fill,
                                               ),
                                             ),
                                           ),
-                                          SizedBox(height: 8 * scale),
-                                          IgnorePointer(
-                                            ignoring: _isSpinning,
-                                            child: PressableButton(
-                                              onTap: _onSpinTap,
-                                              child: SizedBox(
-                                                width: 103 * scale,
-                                                height: 58 * scale,
-                                                child: ColorFiltered(
-                                                  colorFilter: _isSpinning
-                                                      ? const ColorFilter.mode(
-                                                          Color(0x99000000),
-                                                          BlendMode.srcATop,
-                                                        )
-                                                      : const ColorFilter.mode(
-                                                          Colors.transparent,
-                                                          BlendMode.srcOver,
-                                                        ),
-                                                  child: Image.asset(
-                                                    'assets/images/gold_vein/spin_btn.png',
-                                                    fit: BoxFit.fill,
-                                                  ),
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                        ],
+                                        ),
                                       ),
                                     ),
+                                    SizedBox(height: 8 * scale),
+                                    IgnorePointer(
+                                      ignoring: _isSpinning ||
+                                          (_tutorialStateLoaded &&
+                                              _tutorialStep == 3),
+                                      child:
+                                          (_tutorialStateLoaded &&
+                                                  _tutorialStep == 3)
+                                              ? KeyedSubtree(
+                                                  key: _tutorialStep3SpinKey,
+                                                  child: PressableButton(
+                                                    onTap: _onSpinTap,
+                                                    child: SizedBox(
+                                                      width: 103 * scale,
+                                                      height: 58 * scale,
+                                                      child: ColorFiltered(
+                                                        colorFilter: _isSpinning
+                                                            ? const ColorFilter.mode(
+                                                                Color(0x99000000),
+                                                                BlendMode.srcATop,
+                                                              )
+                                                            : const ColorFilter.mode(
+                                                                Colors.transparent,
+                                                                BlendMode.srcOver,
+                                                              ),
+                                                        child: Image.asset(
+                                                          'assets/images/gold_vein/spin_btn.png',
+                                                          fit: BoxFit.fill,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                )
+                                              : PressableButton(
+                                                  onTap: _onSpinTap,
+                                                  child: SizedBox(
+                                                    width: 103 * scale,
+                                                    height: 58 * scale,
+                                                    child: ColorFiltered(
+                                                      colorFilter: _isSpinning
+                                                          ? const ColorFilter.mode(
+                                                              Color(0x99000000),
+                                                              BlendMode.srcATop,
+                                                            )
+                                                          : const ColorFilter.mode(
+                                                              Colors.transparent,
+                                                              BlendMode.srcOver,
+                                                            ),
+                                                      child: Image.asset(
+                                                        'assets/images/gold_vein/spin_btn.png',
+                                                        fit: BoxFit.fill,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ],
                           ),
                         ),
@@ -1984,12 +2272,15 @@ class _GoldVeinScreenState extends State<GoldVeinScreen>
                                   child: Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      SizedBox(
-                                        width: 22 * scale,
-                                        height: 22 * scale,
-                                        child: Image.asset(
-                                          'assets/images/main_screen/coin_icon.png',
-                                          fit: BoxFit.contain,
+                                      Transform.translate(
+                                        offset: const Offset(0, 2),
+                                        child: SizedBox(
+                                          width: 22 * scale,
+                                          height: 22 * scale,
+                                          child: Image.asset(
+                                            'assets/images/main_screen/coin_icon.png',
+                                            fit: BoxFit.contain,
+                                          ),
                                         ),
                                       ),
                                       SizedBox(width: 6 * scale),
@@ -2029,13 +2320,15 @@ class _GoldVeinScreenState extends State<GoldVeinScreen>
               if (_tutorialStateLoaded && _tutorialStep == 2)
                 _buildTutorialStepTwoOverlay(scale),
               if (_tutorialStateLoaded && _tutorialStep == 3)
-                _buildTutorialStepThreeOverlay(scale),
+                _buildTutorialStepThreeOverlay(
+                  scale,
+                  constraints.maxWidth,
+                  constraints.maxHeight,
+                ),
               if (_isWinOverlayVisible &&
                   _winBannerType == _WinBannerType.jackpots)
                 Positioned.fill(
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: _dismissWinOverlay,
+                  child: IgnorePointer(
                     child: FadeTransition(
                       opacity: CurvedAnimation(
                         parent: _notificationController,
@@ -2053,7 +2346,7 @@ class _GoldVeinScreenState extends State<GoldVeinScreen>
                       child: Center(
                         child: Transform.translate(
                           offset: Offset(0, -50 * scale),
-                          child: _buildCenterMessage(scale),
+                          child: _buildCenterMessage(context, scale),
                         ),
                       ),
                     ),

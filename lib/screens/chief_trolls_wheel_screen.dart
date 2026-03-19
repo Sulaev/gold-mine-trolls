@@ -43,6 +43,7 @@ class _ChiefTrollsWheelScreenState extends State<ChiefTrollsWheelScreen>
   late final AnimationController _balanceCountController;
   late final math.Random _rng;
   Timer? _adjustTimer;
+  Timer? _winOverlayAutoHideTimer;
   Stopwatch? _adjustWatch;
   int _activeDelta = 0;
   bool _isWinOverlayVisible = false;
@@ -123,10 +124,9 @@ class _ChiefTrollsWheelScreenState extends State<ChiefTrollsWheelScreen>
   @override
   void dispose() {
     _adjustTimer?.cancel();
+    _winOverlayAutoHideTimer?.cancel();
     _adjustWatch?.stop();
     BalanceService.balanceNotifier.removeListener(_onBalanceNotifierChanged);
-    _adjustTimer?.cancel();
-    _adjustWatch?.stop();
     unawaited(AudioService.instance.stopChiefTrollsWheelSpin());
     _spinController.dispose();
     _notificationController.dispose();
@@ -189,7 +189,7 @@ class _ChiefTrollsWheelScreenState extends State<ChiefTrollsWheelScreen>
     return b.toString();
   }
 
-  Widget _buildOutlinedValue(String value, {double size = 18.58}) {
+  Widget _buildOutlinedValue(String value, {double size = 18.58, double? letterSpacing}) {
     TextStyle valueTextStyle({Color? color, Paint? foreground}) {
       return TextStyle(
         fontFamily: 'Gotham',
@@ -198,7 +198,7 @@ class _ChiefTrollsWheelScreenState extends State<ChiefTrollsWheelScreen>
         fontSize: size,
         fontWeight: FontWeight.w900,
         height: 1.6,
-        letterSpacing: -0.02 * size,
+        letterSpacing: letterSpacing ?? -0.02 * size,
         shadows: const [
           Shadow(color: _balanceStroke, offset: Offset(0, 1.74), blurRadius: 0),
         ],
@@ -318,15 +318,11 @@ class _ChiefTrollsWheelScreenState extends State<ChiefTrollsWheelScreen>
 
   double _pickWeightedMultiplier() {
     _spinCount++;
-    if (_spinCount % 6 == 0) {
-      final winOptions = [1.0, 3.0, 10.0];
-      return winOptions[_rng.nextInt(winOptions.length)];
-    }
     final roll = _rng.nextDouble() * 100;
-    if (roll < 75) return 0;
-    if (roll < 87.5) return 1;
-    if (roll < 93.75) return 3;
-    return 10;
+    if (roll < 48) return 0; // X0: 48% (легче, чем изначальные 70%)
+    if (roll < 76) return 1; // X1: 28%
+    if (roll < 91) return 3; // X3: 15%
+    return 10; // X10: 9%
   }
 
   int _pickIndexForMultiplier(double multiplier) {
@@ -427,6 +423,7 @@ class _ChiefTrollsWheelScreenState extends State<ChiefTrollsWheelScreen>
             top: 14 * scale,
             child: Text(
               'YOU WIN:',
+              textAlign: TextAlign.center,
               style: TextStyle(
                 color: Colors.white,
                 fontFamily: 'Montserrat',
@@ -436,16 +433,19 @@ class _ChiefTrollsWheelScreenState extends State<ChiefTrollsWheelScreen>
             ),
           ),
           Positioned(
-            bottom: 26 * scale,
+            bottom: 30 * scale,
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                SizedBox(
-                  width: 24 * scale,
-                  height: 24 * scale,
-                  child: Image.asset(
-                    'assets/images/shop/coin_icon.png',
-                    fit: BoxFit.contain,
+                Transform.translate(
+                  offset: const Offset(0, 2),
+                  child: SizedBox(
+                    width: 24 * scale,
+                    height: 24 * scale,
+                    child: Image.asset(
+                      'assets/images/shop/coin_icon.png',
+                      fit: BoxFit.contain,
+                    ),
                   ),
                 ),
                 SizedBox(width: 6 * scale),
@@ -459,6 +459,7 @@ class _ChiefTrollsWheelScreenState extends State<ChiefTrollsWheelScreen>
   }
 
   void _showWinOverlay(int amount) {
+    _winOverlayAutoHideTimer?.cancel();
     setState(() {
       _isWinOverlayVisible = true;
       _overlayTargetWin = amount;
@@ -466,6 +467,10 @@ class _ChiefTrollsWheelScreenState extends State<ChiefTrollsWheelScreen>
     });
     _notificationController.forward(from: 0);
     _winCountController.forward(from: 0);
+    _winOverlayAutoHideTimer = Timer(const Duration(milliseconds: 2000), () {
+      if (!mounted) return;
+      _dismissWinOverlay();
+    });
   }
 
   void _dismissWinOverlay() {
@@ -556,7 +561,7 @@ class _ChiefTrollsWheelScreenState extends State<ChiefTrollsWheelScreen>
     );
   }
 
-  Widget _buildTopBar(double scale) {
+  Widget _buildTopBar(double scale, double controlScale) {
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: 12 * scale),
       child: Row(
@@ -568,8 +573,8 @@ class _ChiefTrollsWheelScreenState extends State<ChiefTrollsWheelScreen>
               Navigator.of(context).pop();
             },
             child: SizedBox(
-              width: 38 * scale,
-              height: 38 * scale,
+              width: 38 * controlScale,
+              height: 38 * controlScale,
               child: Image.asset(
                 'assets/images/gold_vein/back_btn.png',
                 fit: BoxFit.contain,
@@ -598,7 +603,7 @@ class _ChiefTrollsWheelScreenState extends State<ChiefTrollsWheelScreen>
             ),
           ),
           SizedBox(width: 42 * scale),
-          SizedBox(width: 38 * scale, height: 38 * scale),
+          SizedBox(width: 38 * controlScale, height: 38 * controlScale),
         ],
       ),
     );
@@ -625,12 +630,15 @@ class _ChiefTrollsWheelScreenState extends State<ChiefTrollsWheelScreen>
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  SizedBox(
-                    width: 22 * scale,
-                    height: 22 * scale,
-                    child: Image.asset(
-                      'assets/images/main_screen/coin_icon.png',
-                      fit: BoxFit.contain,
+                  Transform.translate(
+                    offset: const Offset(0, 2),
+                    child: SizedBox(
+                      width: 22 * scale,
+                      height: 22 * scale,
+                      child: Image.asset(
+                        'assets/images/main_screen/coin_icon.png',
+                        fit: BoxFit.contain,
+                      ),
                     ),
                   ),
                   SizedBox(width: 6 * scale),
@@ -718,48 +726,60 @@ class _ChiefTrollsWheelScreenState extends State<ChiefTrollsWheelScreen>
                     ),
                   ),
                 ),
-                Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      'YOUR BET:',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontFamily: 'Montserrat',
-                        fontWeight: FontWeight.w900,
-                        fontSize: 10.5 * scale,
-                      ),
-                    ),
-                    SizedBox(height: 2 * scale),
-                    Transform.translate(
-                      offset: Offset(0, -6 * scale),
-                      child: Center(
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            SizedBox(
-                              width: 24 * scale,
-                              height: 24 * scale,
-                              child: Image.asset(
-                                'assets/images/shop/coin_icon.png',
-                                fit: BoxFit.contain,
-                              ),
-                            ),
-                            SizedBox(width: 6 * scale),
-                            _buildOutlinedValue(
-                              _formatAmount(_bet),
-                              size: 19 * scale,
-                            ),
-                          ],
+                Center(
+                  child: Transform.translate(
+                    offset: const Offset(0, 2),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'YOUR BET:',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontFamily: 'Gotham',
+                            color: Colors.white,
+                            fontWeight: FontWeight.w900,
+                            fontSize: 11.3 * scale,
+                            height: 1.4,
+                            letterSpacing: -0.02 * 11.3 * scale,
+                          ),
                         ),
-                      ),
+                        SizedBox(height: 2 * scale),
+                        Transform.translate(
+                          offset: const Offset(0, -5),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Transform.translate(
+                                offset: const Offset(0, 2),
+                                child: SizedBox(
+                                  width: 22 * scale,
+                                  height: 22 * scale,
+                                  child: Image.asset(
+                                    'assets/images/shop/coin_icon.png',
+                                    fit: BoxFit.contain,
+                                  ),
+                                ),
+                              ),
+                              SizedBox(width: 6 * scale),
+                              _buildOutlinedValue(
+                                _formatAmount(_bet),
+                                size: (_bet > 999999 ? 19 : 20) * scale,
+                                letterSpacing: -0.04 * (_bet > 999999 ? 19 : 20) * scale,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
-              ],
-            ),
+            ],
           ),
         ),
+      ),
         SizedBox(width: 44 * scale),
         PressableButton(
           onTap: _spinTap,
@@ -789,9 +809,10 @@ class _ChiefTrollsWheelScreenState extends State<ChiefTrollsWheelScreen>
     return Scaffold(
       body: LayoutBuilder(
         builder: (context, constraints) {
-          final scale = (constraints.maxWidth / 390)
-              .clamp(0.82, 1.3)
-              .toDouble();
+          final scale = math
+              .min(constraints.maxWidth / 390, constraints.maxHeight / 844)
+              .clamp(0.82, 1.3);
+          const controlScale = 1.0;
           return Stack(
             children: [
               Positioned.fill(
@@ -804,7 +825,7 @@ class _ChiefTrollsWheelScreenState extends State<ChiefTrollsWheelScreen>
                 child: Column(
                   children: [
                     SizedBox(height: 8 * scale),
-                    _buildTopBar(scale),
+                    _buildTopBar(scale, controlScale),
                     SizedBox(height: 6 * scale),
                     _buildBalance(scale),
                     Expanded(
@@ -866,16 +887,14 @@ class _ChiefTrollsWheelScreenState extends State<ChiefTrollsWheelScreen>
                     ),
                     Padding(
                       padding: EdgeInsets.only(bottom: 12 * scale),
-                      child: _buildBottomControls(scale),
+                      child: _buildBottomControls(controlScale),
                     ),
                   ],
                 ),
               ),
               if (_isWinOverlayVisible)
                 Positioned.fill(
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: _dismissWinOverlay,
+                  child: IgnorePointer(
                     child: FadeTransition(
                       opacity: CurvedAnimation(
                         parent: _notificationController,

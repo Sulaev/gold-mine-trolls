@@ -90,12 +90,12 @@ BEGIN
         BLOCK "040904e4"
         BEGIN
             VALUE "CompanyName", "com.idem" "\0"
-            VALUE "FileDescription", "gold_mine_trolls" "\0"
+            VALUE "FileDescription", "Gold Mine Trolls" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
             VALUE "InternalName", "gold_mine_trolls" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2026 com.idem. All rights reserved." "\0"
             VALUE "OriginalFilename", "gold_mine_trolls.exe" "\0"
-            VALUE "ProductName", "gold_mine_trolls" "\0"
+            VALUE "ProductName", "Gold Mine Trolls" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END
