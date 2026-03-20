@@ -65,11 +65,24 @@ class _RoadOfLuckScreenState extends State<RoadOfLuckScreen> {
   int _currentStep = 0;
   bool _loading = true;
   bool _processingPurchase = false;
+  /// Успешное получение награды — не шлём paywall_close при выходе.
+  bool _hadSuccessfulReward = false;
+
+  static const _paywallSource = 'road_of_luck';
 
   @override
   void initState() {
     super.initState();
+    AnalyticsService.reportPaywallView(_paywallSource);
     _loadProgress();
+  }
+
+  @override
+  void dispose() {
+    if (!_hadSuccessfulReward) {
+      AnalyticsService.reportPaywallClose(_paywallSource);
+    }
+    super.dispose();
   }
 
   Future<void> _loadProgress() async {
@@ -161,6 +174,7 @@ class _RoadOfLuckScreenState extends State<RoadOfLuckScreen> {
         price: _priceValue(price),
         type: 'coin',
       );
+      _hadSuccessfulReward = true;
       if (!mounted) return;
       setState(() {
         _currentStep = nextStep;

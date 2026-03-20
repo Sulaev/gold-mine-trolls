@@ -19,6 +19,22 @@ class MinersPassScreen extends StatefulWidget {
 class _MinersPassScreenState extends State<MinersPassScreen> {
   static const _baseScale = 1.14; // 1.2 * 0.95 — базовая пропорция
 
+  /// Успешная «покупка» подписки (после реального IAP сюда же вешать результат).
+  bool _purchaseCompleted = false;
+
+  static double _storePriceForItem(String itemId) {
+    switch (itemId) {
+      case 'miners_pass_1_week':
+        return 9.99;
+      case 'miners_pass_1_month':
+        return 19.99;
+      case 'miners_pass_3_month':
+        return 39.99;
+      default:
+        return 0;
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -27,13 +43,27 @@ class _MinersPassScreenState extends State<MinersPassScreen> {
 
   @override
   void dispose() {
-    AnalyticsService.reportPaywallClose(widget.source);
+    if (!_purchaseCompleted) {
+      AnalyticsService.reportPaywallClose(widget.source);
+    }
     super.dispose();
   }
 
   Future<void> _onPlanTap(String itemId) async {
     HapticFeedback.lightImpact();
     await AnalyticsService.reportPurchaseClick(itemId: itemId, type: 'sub');
+    try {
+      // TODO: интеграция IAP; при ошибке/отмене — reportPurchaseError.
+      final price = _storePriceForItem(itemId);
+      await AnalyticsService.reportPurchaseSuccess(
+        itemId: itemId,
+        price: price,
+        type: 'sub',
+      );
+      if (mounted) setState(() => _purchaseCompleted = true);
+    } catch (_) {
+      await AnalyticsService.reportPurchaseError(itemId: itemId, type: 'sub');
+    }
   }
 
   static const _buttonTextSize = 16.82;

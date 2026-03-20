@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:gold_mine_trolls/assets/common_assets.dart';
+import 'package:gold_mine_trolls/services/analytics_service.dart';
 import 'package:gold_mine_trolls/services/balance_service.dart';
 import 'package:gold_mine_trolls/services/daily_bonus_service.dart';
 import 'package:gold_mine_trolls/widgets/pressable_button.dart';
@@ -24,6 +25,8 @@ class _WelcomeBonusScreenState extends State<WelcomeBonusScreen>
   static const _trollWidth = 570.0;
   static const _trollHeight = 470.0;
   int _bonusAmount = 10000;
+  /// Уход с экрана после CTA — не считаем закрытием пейволла без действия.
+  bool _welcomeCtaTapped = false;
 
   late final AnimationController _pulseController;
   late final Animation<double> _pulseAnimation;
@@ -31,6 +34,7 @@ class _WelcomeBonusScreenState extends State<WelcomeBonusScreen>
   @override
   void initState() {
     super.initState();
+    AnalyticsService.reportPaywallView('onboarding');
     _loadBonusAmount();
     _pulseController = AnimationController(
       vsync: this,
@@ -43,6 +47,9 @@ class _WelcomeBonusScreenState extends State<WelcomeBonusScreen>
 
   @override
   void dispose() {
+    if (!_welcomeCtaTapped) {
+      AnalyticsService.reportPaywallClose('onboarding');
+    }
     _pulseController.dispose();
     super.dispose();
   }
@@ -267,6 +274,7 @@ class _WelcomeBonusScreenState extends State<WelcomeBonusScreen>
       child: PressableButton(
         onTap: () async {
           HapticFeedback.lightImpact();
+          _welcomeCtaTapped = true;
           final amount = await DailyBonusService.claimTodayBonus();
           if (amount != null) {
             await BalanceService.addBalance(amount);

@@ -30,20 +30,6 @@ class InfoScreen extends StatelessWidget {
     );
   }
 
-  /// Placeholder content for games — use until game-specific content is ready.
-  static Widget placeholderContent(String text) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        child: Text(
-          text,
-          textAlign: TextAlign.center,
-          style: mainTextStyle(),
-        ),
-      ),
-    );
-  }
-
   /// Multiplier text style (Gotham Ultra): 16px, #F3FF45, uppercase.
   static TextStyle multiplierTextStyle() {
     return const TextStyle(

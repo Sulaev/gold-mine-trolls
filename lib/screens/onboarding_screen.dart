@@ -171,9 +171,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('terms_accepted', true);
     await prefs.setBool('onboarding_completed', true);
-    const _testModeAlwaysShowWelcomeBonus = false;
-    final isBonusAvailable = _testModeAlwaysShowWelcomeBonus ||
-        await DailyBonusService.isBonusAvailableToday();
+    final isBonusAvailable = await DailyBonusService.isBonusAvailableToday();
 
     if (!mounted) return;
     Navigator.of(context).pushReplacement(

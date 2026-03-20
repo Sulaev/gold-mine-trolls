@@ -25,8 +25,4 @@ class RoadOfLuckService {
     return next;
   }
 
-  static Future<void> reset() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt(_currentStepKey, 0);
-  }
 }

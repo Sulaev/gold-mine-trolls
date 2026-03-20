@@ -1,6 +1,7 @@
 import 'package:appmetrica_plugin/appmetrica_plugin.dart';
 import 'package:flutter/foundation.dart';
 
+/// События и параметры — по ТЗ (плоские ключи: game_name, source, item_id, type, price).
 class AnalyticsService {
   AnalyticsService._();
 
@@ -29,67 +30,66 @@ class AnalyticsService {
     } catch (_) {}
   }
 
-  static Future<void> _reportScopedEvent(
+  static Future<void> _reportWithMap(
     String name,
-    String scope, {
-    Map<String, Object?> params = const {},
-  }) async {
+    Map<String, Object> params,
+  ) async {
     if (!_activated) return;
     try {
-      await AppMetrica.reportEventWithMap(name, {
-        scope: params,
-      });
+      await AppMetrica.reportEventWithMap(name, params);
     } catch (_) {}
   }
 
   static Future<void> reportGameStart(String gameName) =>
-      _reportScopedEvent('game_start', gameName);
+      _reportWithMap('game_start', {'game_name': gameName});
 
   static Future<void> reportGameWin(String gameName) =>
-      _reportScopedEvent('game_win', gameName);
+      _reportWithMap('game_win', {'game_name': gameName});
 
   static Future<void> reportGameLoss(String gameName) =>
-      _reportScopedEvent('game_loss', gameName);
+      _reportWithMap('game_loss', {'game_name': gameName});
 
+  /// bet_change: game_name + размер ставки (расширение к ТЗ).
   static Future<void> reportBetChange(String gameName, int bet) =>
-      _reportScopedEvent('bet_change', gameName, params: {'bet': bet});
+      _reportWithMap('bet_change', {
+        'game_name': gameName,
+        'bet': bet,
+      });
 
   static Future<void> reportPaywallView(String source) =>
-      _reportScopedEvent('paywall_view', source);
+      _reportWithMap('paywall_view', {'source': source});
 
   static Future<void> reportPaywallClose(String source) =>
-      _reportScopedEvent('paywall_close', source);
+      _reportWithMap('paywall_close', {'source': source});
 
   static Future<void> reportPurchaseClick({
     required String itemId,
     required String type,
   }) =>
-      _reportScopedEvent(
-        'purchase_click',
-        itemId,
-        params: {'item_id': itemId, 'type': type},
-      );
+      _reportWithMap('purchase_click', {
+        'item_id': itemId,
+        'type': type,
+      });
 
   static Future<void> reportPurchaseSuccess({
     required String itemId,
     required num price,
     required String type,
   }) =>
-      _reportScopedEvent(
-        'purchase_success',
-        itemId,
-        params: {'item_id': itemId, 'price': price, 'type': type},
-      );
+      _reportWithMap('purchase_success', {
+        'item_id': itemId,
+        'price': price,
+        'type': type,
+      });
 
   static Future<void> reportPurchaseError({
     required String itemId,
     required String type,
   }) =>
-      _reportScopedEvent(
-        'purchase_error',
-        itemId,
-        params: {'item_id': itemId, 'type': type},
-      );
+      _reportWithMap('purchase_error', {
+        'item_id': itemId,
+        'type': type,
+      });
 
   static Future<void> reportSettingsOpen() => _reportEvent('settings_open');
 
